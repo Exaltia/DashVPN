@@ -1,42 +1,67 @@
-import socket,sys,os, io
-import multiprocessing.queues
+import socket
+import sys
+import os
 from time import sleep
-import multiprocessing as mp
-import struct, asyncio
-import fcntl, select
+import _thread
+import struct
+import fcntl
+import select
+def sender():
+    while True:
+        try:
+            s2.sendto(out_queue.pop(0), (otherend[2][0], otherend[2][1]))
+            s1.sendto(out_queue.pop(0), (otherend[1][0], otherend[1][1]))
+            s.sendto(out_queue.pop(0), (otherend[0][0], otherend[0][1]))
+        except IndexError:
+            sleep(0.0001)
+        except KeyboardInterrupt:
+            sys.exit(0)
+        except:
+            print('problem in sender')
+            print(sys.exc_info())
+    sleep(0.001)
+def taphandling():
+    next_one_out = 0
+    next_one_in = 0
+    inputs = [tap]
+    outputs = [tap]
+    print('tap handling ready!')
+    while True:
+        if next_one_out >= 255:
+            next_one_out = 0
+        if next_one_in >= 255:
+            next_one_in = 0
+        try:
+            readable, writable, exceptional = select.select(inputs, outputs, inputs)
+            if readable:
+                out_queue.append(bytes(str(next_one_out) + '&', 'ascii') + tap.read(1500))
+                next_one_out += 1
+            else:
+                try:
+                    tap.write(orderer_dict.pop(min(orderer_dict)))
+                except KeyError:
+                    sleep(0.0001)
+                except ValueError:
+                    sleep(0.001)
+                except ValueError:
+                    sleep(0.001)
+                except IndexError:
+                    sleep(0.0001)
+                except:
+                    print(sys.exc_info())
+        except KeyboardInterrupt:
+            sys.exit(0)
+        except:
+            print('error from taphandling')
+            print(sys.exc_info())
 def starting():
-    # mycard = io.BytesIO()
-
-    # s2.setblocking(0)
-    i = 0
-    print('je suis main')
-    # try:
-    print('je try hard.')
-    q = mp.Queue()
-    global bordel_a_paquets
-    bordel_a_paquets = {}
-    bordel_a_paquets['coucou'] = ''
-    # q = Queue()
-
-    print('ok')
-
-    # while b'#Balancetonport' not in rawotherend:
+    print('Initializing')
     print(rawotherend)
     while len(rawotherend) < 3:
         try:
-            rawotherend.append((s.recvfrom(1500)))
-            print(rawotherend)
-            # print('rfrff', rawotherend)
-            # sleep(5)
-            print(len(otherend))
-            # print('otherend', otherend)
+            rawotherend.append(s.recvfrom(1500))
             rawotherend.append(s1.recvfrom(1500))
-            print(len(otherend))
-            # print('otherend', otherend)
             rawotherend.append(s2.recvfrom(1500))
-            print(len(otherend))
-            # print('otherend', otherend)
-            # print(len(otherend) == 3)
         except KeyboardInterrupt:
             sys.exit(0)
         except:
@@ -44,12 +69,9 @@ def starting():
         print(rawotherend)
         sleep(3)
     for row in rawotherend:
-        # print('row', row[1])
         otherend.append(row[1])
-        print(otherend)
-        # sleep(3)
-    print('other end is', otherend)
 if __name__ == "__main__":
+    orderer_dict = {}
     config = {}
     with open('serverconfig.cfg') as serverconf:
         for line in serverconf:
@@ -61,7 +83,7 @@ if __name__ == "__main__":
                 sys.exit()
             else:
                 config[line[0]] = line[1]
-        print(config)
+        print('Configuration OK')
 
     my_timeout_value = 3
     retries = 4
@@ -69,14 +91,11 @@ if __name__ == "__main__":
     otherend = []
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP,)
     # print(dir(s))
-    s.bind(('0.0.0.0', int(config['localport1']))) #localhost infos in the config is actually not used
+    s.bind(('0.0.0.0', int(config['localport1'])))
     print(s)
     s.settimeout(my_timeout_value)
-    # s.settimeout(0.1)
-    # s.setblocking(0)
     s1 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     s1.bind(('0.0.0.0', int(config['localport2'])))
-    # s1.setblocking(0)
     s2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     s2.bind(('0.0.0.0', int(config['localport3'])))
     TUNSETIFF = 0x400454ca
@@ -85,7 +104,6 @@ if __name__ == "__main__":
     IFF_TAP = 0x0002
     IFF_NO_PI = 0x1000
     tap = open("/dev/net/tun", "r+b",  buffering=0) #os.open is for python 2 ONLY!, it's open in python3
-    # readtap = open("/dev/net/tun", "rb")
     ifr = struct.pack('16sH', 'pyvpn0'.encode(), IFF_TAP | IFF_NO_PI)
     funcreturn = fcntl.ioctl(tap, TUNSETIFF, ifr)
     print('funcreturn', funcreturn)
@@ -93,71 +111,34 @@ if __name__ == "__main__":
     fl = fcntl.fcntl(tap.fileno(), fcntl.F_GETFL)
     fcntl.fcntl(tap.fileno(), fcntl.F_SETFL, fl | os.O_NONBLOCK)
     starting()
+    print('Init OK')
+    mysender = _thread.start_new_thread(sender, ())
+    mytaphandler = _thread.start_new_thread(taphandling, ())
     print(s, s1, s2)
     nextsocket = 1
     try:
-        inputs = [s, s1, s2, tap]
-        outputs = [s, s1, s2]
+        inputs = [s, s1, s2]
+        outputs = []
         out_queue = []
+        in_queue = []
         while True:
-            # print('je tru(elle)')
             readable, writable, exceptional = select.select(inputs, outputs, inputs)
-            # print('results!', readable, writable, exceptional)
-            # sleep(1)
             if readable:
-                # print('yep, readable but...')
-                # sleep(1)
                 for each in readable:
-                    # print('each', each)
-                    if 'socket' in str(each):
-                        # print('this is a socket')
-                        tap.write(each.recv(1500))
-                    if 'FileIO' in str(each):
-                        # print('this is a file')
-                        out_queue.append(each.read(1500))
-                        # print(each.read(1500))
-            if writable:
-                if len(out_queue) >= 1:
-
-                    # testtype = str(writable)
-                    # print(type(testtype))
-                    # sleep(10)
-                    # print("j'ai un truc a envoyer")
-                    # sleep(1)
-                    # for row in writable:
                     try:
-                        if str(config['localport1']) in str(writable) and nextsocket == 1:
-                            s.sendto(out_queue.pop(0), (otherend[0][0], otherend[0][1]))
-                            nextsocket = 2
-                            # print('sock1')
-                            # print('sent from 4242!')
-                            # sleep(1)
-                        if str(config['localport2']) in str(writable) and nextsocket == 2:
-                            s1.sendto(out_queue.pop(0), (otherend[1][0], otherend[1][1]))
-                            nextsocket = 3
-                            # print(otherend[1][0], otherend[1][1])
-                            # print('sock2')
-                        if str(config['localport3']) in str(writable) and nextsocket == 3:
-                            s2.sendto(out_queue.pop(0), (otherend[2][0], otherend[2][1]))
-                            nextsocket = 1
-                            # print(otherend[2][0], otherend[2][1])
-                            # print('sock3')
-                    except IndexError:
-                        pass
-                    except KeyboardInterrupt:
-                        sys.exit(0)
-                    except:
-                        print(sys.exc_info())
-                    # sleep(5)
-            sleep(0.001)
+                        preprocess = each.recv(1500)
+                        preprocess = preprocess.split(b'&', 1)
+                        pos_zero = preprocess[0]
+                        preprocess[0] = pos_zero.decode()
+                        orderer_dict[preprocess[0]] = preprocess[1]
+                    except UnicodeDecodeError:
+                        sleep(0.0001)
 
-            # sleep(1)
+            sleep(0.0001)
     except BlockingIOError:
         print('sblarf1 :(', sys.exc_info())
-        # sleep(4)
         pass
         print('sblarf :(', sys.exc_info())
-        # sleep(5)
     except KeyboardInterrupt:
         sys.exit(0)
     except TimeoutError:
