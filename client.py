@@ -14,7 +14,6 @@ def sender():
             s2.sendto(out_queue.pop(0), (clientconfig['remotehost3'], int(clientconfig['remoteport3'])))
             s1.sendto(out_queue.pop(0), (clientconfig['remotehost2'], int(clientconfig['remoteport2'])))
             s.sendto(out_queue.pop(0), (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))
-            sleep(0.001)
         except IndexError:
             sleep(0.0001)
         except KeyboardInterrupt:
@@ -28,9 +27,9 @@ def taphandling():
     outputs = [tap]
     print('tap handling ready!')
     while True:
-        if next_one_out >= 255:
+        if int(next_one_out) >= 3499:
             next_one_out = 0
-        if next_one_in >= 255:
+        if int(next_one_in) >= 3499:
             next_one_in = 0
         try:
             readable, writable, exceptional = select.select(inputs, outputs, inputs)
@@ -39,9 +38,16 @@ def taphandling():
                 next_one_out += 1
             else:
                 try:
-                    print('next one in is', min(orderer_dict), 'next one out is', next_one_out, end='\r' )
-                    tap.write(orderer_dict.pop(min(orderer_dict)))
-                except KeyError:
+                    stuckcounter = 0
+                    if bytes(next_one_in) + b'&' not in min(in_queue):
+                        sleep(0.003)
+                        stuckcounter +=1
+                    stuckcounter = 0
+                    in_queue_index = in_queue.index(min(in_queue)) #can't do in one line because it's bytes
+                    to_write = in_queue.pop(in_queue_index)
+                    to_write = to_write.split(b'&', 1)
+                    next_one_in = int(to_write[0])
+                    tap.write(to_write[1])
                     sleep(0.0001)
                 except ValueError:
                     sleep(0.001)
@@ -117,10 +123,7 @@ if __name__ == "__main__":
                 for each in readable:
                     try:
                         preprocess = each.recv(1500)
-                        preprocess = preprocess.split(b'&', 1)
-                        pos_zero = preprocess[0]
-                        preprocess[0] = pos_zero.decode()
-                        orderer_dict[preprocess[0]] = preprocess[1]
+                        in_queue.append(preprocess)
                     except UnicodeDecodeError:
                         sleep(0.0001)
             sleep(0.0001)
