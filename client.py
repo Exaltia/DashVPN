@@ -78,50 +78,52 @@ def taphandling():
                             out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
-                            out_queue.append(bytes('other&', 'ascii')) + packet
+                            out_queue.append(bytes('other&', 'ascii') + packet)
                     else:
                         # print('i send')
                         print('other packet')
                         print('is this it?', packet)
-                        out_queue.append(bytes('other&', 'ascii') + packet)  # We don't care of the order if this is not tcp
+                        out_queue.append(bytes('other&', 'ascii') + packet) # We don't care of the order if this is not tcp
                         print('out_queue', out_queue)
                 except:
                     print('error form tap ipv4 handling', sys.exc_info())
 
-                if writable:
-                    try:
-                        # print('try to write')
-                        # stuckcounter = 0
-                        # while stuckcounter >= 3:
-                        # if bytes(next_one_in) + b'&' not in min(tcp_in_queue):
-                        #     sleep(0.0001)
-                        #     stuckcounter +=1
-                        # stuckcounter = 0
-                        if len(tcp_in_queue) >= 1:
-                            in_queue_index = tcp_in_queue.index(min(tcp_in_queue)) #can't do in one line because it's bytes
-                            to_write = tcp_in_queue.pop(in_queue_index)
-                            to_write = to_write.split(b'&', 1)
-                            # next_one_in = int(to_write[0])
-                            tap.write(to_write[1])
-                        if len(other_in_queue) >= 1:
-                            to_write = other_in_queue.pop(0)
-                            to_write = to_write.split(b'&', 1)
-                            tap.write(to_write[1])
-                        sleep(0.0001)
-                    except KeyError:
-                        sleep(0.0001)
-                    except ValueError:
-                        sleep(0.001)
-                    except ValueError:
-                        sleep(0.001)
-                    except IndexError:
-                        sleep(0.0001)
-                    except:
-                        print(sys.exc_info())
-                        exc_type, exc_obj, exc_tb = sys.exc_info()
-                        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                        print(exc_type, fname, exc_tb.tb_lineno)
-                        sleep(10)
+            if writable:
+                try:
+                    # print('try to write')
+                    # stuckcounter = 0
+                    # while stuckcounter >= 3:
+                    # if bytes(next_one_in) + b'&' not in min(tcp_in_queue):
+                    #     sleep(0.0001)
+                    #     stuckcounter +=1
+                    # stuckcounter = 0
+                    if tcp_in_queue:
+                        print('i write tcp')
+                        in_queue_index = tcp_in_queue.index(min(tcp_in_queue)) #can't do in one line because it's bytes
+                        to_write = tcp_in_queue.pop(in_queue_index)
+                        to_write = to_write.split(b'&', 1)
+                        # next_one_in = int(to_write[0])
+                        tap.write(to_write[1])
+                    if other_in_queue:
+                        print('i write other')
+                        to_write = other_in_queue.pop(0)
+                        to_write = to_write.split(b'&', 1)
+                        tap.write(to_write[1])
+                    sleep(0.0001)
+                except KeyError:
+                    sleep(0.0001)
+                except ValueError:
+                    sleep(0.001)
+                except ValueError:
+                    sleep(0.001)
+                except IndexError:
+                    sleep(0.0001)
+                except:
+                    print(sys.exc_info())
+                    exc_type, exc_obj, exc_tb = sys.exc_info()
+                    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                    print(exc_type, fname, exc_tb.tb_lineno)
+                    sleep(10)
         except KeyboardInterrupt:
             sys.exit(0)
         except ValueError:
@@ -129,6 +131,7 @@ def taphandling():
         except:
             print('error from taphandling')
             print(sys.exc_info())
+    sleep(0.001)
 def starting():
     print('Initializing')
     try:
