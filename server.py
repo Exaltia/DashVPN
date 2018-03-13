@@ -9,15 +9,20 @@ import select
 import binascii
 def sender():
     print('sender ready')
+        # print('sent!!')
+    sx = [(s2, (otherend[2][0], otherend[2][1]),
+           (s1, (otherend[1][0], otherend[1][1]),
+            (s, (otherend[0][0], otherend[0][1]))))]
+        # s2.sendto(out_queue.pop(0), (otherend[2][0], otherend[2][1]))
+        # s1.sendto(out_queue.pop(0), (otherend[1][0], otherend[1][1]))
+        # s.sendto(out_queue.pop(0), (otherend[0][0], otherend[0][1]))
+        # print('really sent!!')
     while True:
         try:
-            # print('sent!!')
-            s2.sendto(out_queue.pop(0), (otherend[2][0], otherend[2][1]))
-            s1.sendto(out_queue.pop(0), (otherend[1][0], otherend[1][1]))
-            s.sendto(out_queue.pop(0), (otherend[0][0], otherend[0][1]))
-            # print('really sent!!')
+            next = sx.pop(0)
+            sx.append(next)
+            next[0].sendto(out_queue.pop(0), next[1])
         except IndexError:
-            # print('empty?', out_queue)
             sleep(0.0001)
         except KeyboardInterrupt:
             sys.exit(0)
@@ -48,7 +53,7 @@ def taphandling():
                     version = '{0:0{1}b}'.format(version,1*8)  # IP version number is 4 bytes, we must transforme the byte in bits to ensure correct calculation of Ip version
                     version = version[0:4]
                     version = int(version, 2)
-                    print('version', version)
+                    # print('version', version)
                     if version == 6:
                         isittcp = int(list(headerBytes[20:21])[0])
                         if isittcp == 6:
@@ -56,7 +61,7 @@ def taphandling():
                             seqnumber = binascii.hexlify(seqnumber)
                             if seqnumber:  # Because it trow a value error if seqnumber is empty
                                 seqnumber = int(seqnumber, 16) #base16, input is hex, and we want a plain number
-                                print('seqnumber ipv6', seqnumber)
+                                # print('seqnumber ipv6', seqnumber)
                                 out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
@@ -76,20 +81,19 @@ def taphandling():
                             seqnumber = binascii.hexlify(seqnumber)
                             if seqnumber:  # Because it trow a value error if seqnumber is empty
                                 seqnumber = int(seqnumber, 16) #base16, input is hex, and we want a plain number
-                            print('seqnumber ipv4', seqnumber)
+                            # print('seqnumber ipv4', seqnumber)
                             out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
                     else:
-                        print('i send')
-
                         out_queue.append(bytes('other&', 'ascii') + packet)  # We don't care of the order if this is not tcp
                         # print('out_queue', out_queue)
                 except:
                     print('error form tap ipv4 handling', sys.exc_info())
 
-            if writable:
+            # if writable:
+            else:
                 try:
                     # print('try to write')
                     # stuckcounter = 0
@@ -100,17 +104,17 @@ def taphandling():
                     # stuckcounter = 0
                     # print('queues, tcp and other', tcp_in_queue, other_in_queue)
                     if tcp_in_queue:
-                        print('writing tcp')
+                        # print('writing tcp')
                         in_queue_index = tcp_in_queue.index(min(tcp_in_queue)) #can't do in one line because it's bytes
                         to_write = tcp_in_queue.pop(in_queue_index)
                         to_write = to_write.split(b'&', 1)
                         # next_one_in = int(to_write[0])
                         tap.write(to_write[1])
                     if other_in_queue:
-                        print('writing other')
+                        # print('writing other')
                         to_write = other_in_queue.pop()
                         to_write = to_write.split(b'&', 1)
-                        print('to write other', to_write)
+                        # print('to write other', to_write)
                         tap.write(to_write[1])
                     sleep(0.0001)
                 except KeyError:
