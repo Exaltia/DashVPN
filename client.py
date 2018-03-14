@@ -10,15 +10,21 @@ import select
 import binascii
 def sender():
     print('sender ready')
-    sx = [(s2, (clientconfig['remotehost3'], int(clientconfig['remoteport3'])),
-           (s1, (clientconfig['remotehost2'], int(clientconfig['remoteport2'])),
-            (s, (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))))]
+    sx = [(s2, (clientconfig['remotehost3'], int(clientconfig['remoteport3']))),
+          (s1, (clientconfig['remotehost2'], int(clientconfig['remoteport2']))),
+          (s, (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))]
     while True:
+        #Take one connexion pop it and send it, allowing better tolerance against a link loss or flap
         try:
             next = sx.pop(0)
+            # next = sx[0]
+            # print('sx lenght', len(sx), end='\r')
+            print('next!', next)
+            sleep(0.3)
             sx.append(next)
             next[0].sendto(out_queue.pop(0), next[1])
         except IndexError:
+            print('index error!')
             sleep(0.0001)
         except KeyboardInterrupt:
             sys.exit(0)
@@ -136,6 +142,9 @@ def taphandling():
             print('error from taphandling')
             print(sys.exc_info())
     sleep(0.001)
+# def ping():
+#     try:
+#
 def starting():
     print('Initializing')
     try:
@@ -161,6 +170,7 @@ if __name__ == "__main__":
             else:
                 clientconfig[line[0]] = line[1]
         print('Configuration OK')
+    my_timeout_value = 3
     rawotherend = []
     otherend = []
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -185,15 +195,22 @@ if __name__ == "__main__":
     mysender = _thread.start_new_thread(sender, ())
     mytaphandler = _thread.start_new_thread(taphandling, ())
     nextsocket = 1
+    s.settimeout(my_timeout_value)
     try:
         inputs = [s, s1, s2]
         outputs = []
+        exception_sockets = []
         out_queue = []
         tcp_in_queue = []
         other_in_queue = []
         while True:
-            readable, writable, exceptional = select.select(inputs, outputs, inputs)
+            readable, writable, exceptional = select.select(inputs, outputs, exception_sockets, 5)
+            # print('readable', readable)
+            # sleep(0.3)
             if readable:
+                # print('timeout value', s.gettimeout())
+                # print('still readable!')
+                # sleep(0.3)
                 for each in readable:
                     try:
                         preprocess = each.recv(1500)
@@ -204,8 +221,14 @@ if __name__ == "__main__":
                             other_in_queue.append(preprocess)
                     except UnicodeDecodeError:
                         sleep(0.0001)
-
             sleep(0.0001)
+            # if not readable:
+            #     for each in inputs:
+            #         if already_pinged == 0:
+
+
+    except TimeoutError:
+        print('timeout error!')
     except BlockingIOError:
         print('sblarf1 :(', sys.exc_info())
         sleep(4)

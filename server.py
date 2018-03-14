@@ -10,9 +10,9 @@ import binascii
 def sender():
     print('sender ready')
         # print('sent!!')
-    sx = [(s2, (otherend[2][0], otherend[2][1]),
-           (s1, (otherend[1][0], otherend[1][1]),
-            (s, (otherend[0][0], otherend[0][1]))))]
+    sx = [(s2, (otherend[2][0], otherend[2][1])),
+          (s1, (otherend[1][0], otherend[1][1])),
+          (s, (otherend[0][0], otherend[0][1]))]
         # s2.sendto(out_queue.pop(0), (otherend[2][0], otherend[2][1]))
         # s1.sendto(out_queue.pop(0), (otherend[1][0], otherend[1][1]))
         # s.sendto(out_queue.pop(0), (otherend[0][0], otherend[0][1]))
@@ -20,6 +20,7 @@ def sender():
     while True:
         try:
             next = sx.pop(0)
+            # print(sx)
             sx.append(next)
             next[0].sendto(out_queue.pop(0), next[1])
         except IndexError:
@@ -31,8 +32,7 @@ def sender():
             print(sys.exc_info())
     sleep(0.001)
 def taphandling():
-    next_one_out = 0
-    next_one_in = 0
+
     inputs = [tap]
     outputs = [tap]
     print('tap handling ready!')
@@ -156,6 +156,7 @@ def starting():
         sleep(3)
     for row in rawotherend:
         otherend.append(row[1])
+    print('otherend'), otherend
 if __name__ == "__main__":
     orderer_dict = {}
     config = {}
@@ -179,9 +180,10 @@ if __name__ == "__main__":
     # print(dir(s))
     s.bind(('0.0.0.0', int(config['localport1'])))
     print(s)
-    s.settimeout(my_timeout_value)
+    # s.settimeout(my_timeout_value)
     s1 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     s1.bind(('0.0.0.0', int(config['localport2'])))
+    # s1.settimeout(my_timeout_value)
     s2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     s2.bind(('0.0.0.0', int(config['localport3'])))
     TUNSETIFF = 0x400454ca
@@ -208,8 +210,11 @@ if __name__ == "__main__":
         out_queue = []
         tcp_in_queue = []
         other_in_queue = []
+        # s.settimeout(my_timeout_value)
+        # s1.settimeout(my_timeout_value)
+        # s2.settimeout(my_timeout_value)
         while True:
-            readable, writable, exceptional = select.select(inputs, outputs, inputs)
+            readable, writable, exceptional = select.select(inputs, outputs, inputs, my_timeout_value)
             if readable:
                 for each in readable:
                     try:
@@ -223,7 +228,7 @@ if __name__ == "__main__":
                             other_in_queue.append(preprocess)
                             # print('other in queue from socket', other_in_queue)
                     except UnicodeDecodeError:
-                        priont(sys.exc_info())
+                        print(sys.exc_info())
                         sleep(0.0001)
 
             sleep(0.0001)
