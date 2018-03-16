@@ -1,7 +1,7 @@
 import socket
 import sys
 import os
-from time import sleep
+from time import sleep, time
 import _thread
 import struct
 import fcntl
@@ -10,18 +10,19 @@ import binascii
 def sender():
     print('sender ready')
         # print('sent!!')
-    sx = [(s2, (otherend[2][0], otherend[2][1])),
-          (s1, (otherend[1][0], otherend[1][1])),
-          (s, (otherend[0][0], otherend[0][1]))]
+
+
         # s2.sendto(out_queue.pop(0), (otherend[2][0], otherend[2][1]))
         # s1.sendto(out_queue.pop(0), (otherend[1][0], otherend[1][1]))
         # s.sendto(out_queue.pop(0), (otherend[0][0], otherend[0][1]))
         # print('really sent!!')
     while True:
+
         try:
-            next = sx.pop(0)
+            sx2 = sx
+            next = sx2.pop(0)
             # print(sx)
-            sx.append(next)
+            sx2.append(next)
             next[0].sendto(out_queue.pop(0), next[1])
         except IndexError:
             sleep(0.0001)
@@ -158,6 +159,8 @@ def starting():
         otherend.append(row[1])
     print('otherend'), otherend
 if __name__ == "__main__":
+    sx = []
+    lasttime = float()
     orderer_dict = {}
     config = {}
     with open('serverconfig.cfg') as serverconf:
@@ -186,6 +189,7 @@ if __name__ == "__main__":
     # s1.settimeout(my_timeout_value)
     s2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     s2.bind(('0.0.0.0', int(config['localport3'])))
+
     TUNSETIFF = 0x400454ca
     TUNSETOWNER = TUNSETIFF + 2
     IFF_TUN = 0x0001
@@ -202,36 +206,126 @@ if __name__ == "__main__":
     print('Init OK')
     mysender = _thread.start_new_thread(sender, ())
     mytaphandler = _thread.start_new_thread(taphandling, ())
+    sx = [(s2, (otherend[2][0], otherend[2][1])),
+          (s1, (otherend[1][0], otherend[1][1])),
+          (s, (otherend[0][0], otherend[0][1]))]
     print(s, s1, s2)
     nextsocket = 1
     try:
+        connstate = [2, 2, 2] # Assuming that all links are working at the client start
         inputs = [s, s1, s2]
         outputs = []
+        exception_sockets = []
         out_queue = []
         tcp_in_queue = []
         other_in_queue = []
-        # s.settimeout(my_timeout_value)
-        # s1.settimeout(my_timeout_value)
-        # s2.settimeout(my_timeout_value)
         while True:
-            readable, writable, exceptional = select.select(inputs, outputs, inputs, my_timeout_value)
+            readable, writable, exceptional = select.select(inputs, outputs, inputs, 5)
+            # print('readable', readable)
+            # sleep(0.3)
+            diff = set(readable) ^ set(inputs)
             if readable:
+                # print('timeout value', s.gettimeout())
+                # print('still readable!')
+                # sleep(0.3)
                 for each in readable:
                     try:
-                        preprocess = each.recv(1500)
-                        # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp
-                        if b'&' in preprocess and not preprocess.startswith(b'other'):
-                            # print('got tcp')
-                            tcp_in_queue.append(preprocess)
-                        else:
-                            # print('got other')
-                            other_in_queue.append(preprocess)
-                            # print('other in queue from socket', other_in_queue)
-                    except UnicodeDecodeError:
-                        print(sys.exc_info())
-                        sleep(0.0001)
+                        preprocess = each.recvfrom(1500)
+                        if preprocess[0] == b'RECONNECT':
+                            print('reconnecting')
+                            if each == s:
+                                otherend[0] = preprocess[1]
+                                # otherend[0][1] = preprocess[1][1]
+                                sx.append((s, (otherend[0][0],  otherend[0][1])))
+                            if each == s1:
+                                otherend[1] = preprocess[1]
+                                # otherend[1][1] = preprocess[1][1]
+                                sx.append((s1, (otherend[1][0],  otherend[1][1])))
+                            if each == s2:
+                                otherend[2] = preprocess[1]
+                                # otherend[2][1] = preprocess[1][1]
+                                sx.append((s2, (otherend[2][0],  otherend[2][1])))
+                            # sx.append((each, (clientconfig['remotehost1'], int(clientconfig['remoteport1']))))
 
+                        if preprocess[0] == b'PING':
+                            # print('ping')
+                            if each == s and connstate[0] <= 2:
+                                print('pong from s')
+                                connstate[0] = 2
+                            elif each == s1 and connstate[1] <= 2:
+                                print('pong from s')
+                                connstate[1] = 2
+                            elif each == s2 and connstate[2] <= 2:
+                                print('pong from s')
+                                connstate[0] = 2
+                        # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp
+                        if b'&' in preprocess[0] and not preprocess[0].startswith(b'other'):
+                            tcp_in_queue.append(preprocess[0])
+                        else:
+                            other_in_queue.append(preprocess[0])
+                    except UnicodeDecodeError:
+                        sleep(0.0001)
+                for each in diff:
+                    # unlike on client, we don't remove inputs
+                    try:
+                        if lasttime < time() - my_timeout_value:
+                            lasttime = time()
+                            if each == s and connstate[0] == 2:
+                                print('ping from s')
+                                # if each not in sx:
+                                each.sendto(bytes('PONG', 'ascii'), (otherend[0][0], otherend[0][1]))
+                                connstate[0] = 1
+                            elif each == s1 and connstate[1] == 2:
+                                each.sendto(bytes('PONG', 'ascii'), (otherend[1][0], otherend[1][1]))
+                                connstate[1] = 1
+                            elif each == s2 and connstate[2] == 2:
+                                print('connstate', connstate)
+                                each.sendto(bytes('PONG', 'ascii'), (otherend[2][0], otherend[2][1]))
+                                connstate[2] = 1
+                            elif connstate[0] == 1:
+                                if lasttime < time() - my_timeout_value *2:
+                                    print('removing socket s')
+                                    sx.pop(sx.index(s))
+                                    connstate[0] = 0
+                            elif connstate[1] == 1:
+                                if lasttime < time() - my_timeout_value *2:
+                                    print('removing socket s1')
+                                    sx.pop(sx.index(s1))
+                                    connstate[1] = 0
+                            elif connstate[2] == 1:
+                                if lasttime < time() - my_timeout_value *2:
+                                    print('removing socket s2')
+                                    sx.pop(sx.index(s2))
+                                    connstate[2] = 0
+                    except ValueError:
+                        sleep(0.001)
+                    except:
+                        print(sys.exc_info())
+                        pass
+                # if exceptional:
+                #     for each in exceptional:
+                #         if each == s and connstate[0] > 0:
+                #             inputs.append(exception_sockets.pop(exception_sockets.index(s)))
+                #             each.sendto(bytes('RECONNECT', 'ascii'), (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))
+                #         elif each == s1 and connstate[1] > 0:
+                #             # sx.append((s1, (clientconfig['remotehost2'], int(clientconfig['remoteport2']))))
+                #             inputs.append(exception_sockets.pop(exception_sockets.index(s1)))
+                #             each.sendto(bytes('RECONNECT', 'ascii'), (clientconfig['remotehost2'], int(clientconfig['remoteport2'])))
+                #         elif each == s2 and connstate[2] > 0:
+                #             # sx.append((s2, (clientconfig['remotehost3'], int(clientconfig['remoteport3']))))
+                #             inputs.append(exception_sockets.pop(exception_sockets.index(s2)))
+                #             each.sendto(bytes('RECONNECT', 'ascii'), (clientconfig['remotehost3'], int(clientconfig['remoteport3'])))
             sleep(0.0001)
+            if not readable:
+                for each in inputs:
+                    if lasttime < time() - my_timeout_value / 2:
+                        lasttime = time()
+                        if each == s:
+                            each.sendto(bytes('PONG', 'ascii'), (otherend[0][0], otherend[0][1]))
+                        elif each == s1:
+                            each.sendto(bytes('PONG', 'ascii'), (otherend[1][0], otherend[1][1]))
+                        elif each == s2:
+                            each.sendto(bytes('PONG', 'ascii'), (otherend[2][0], otherend[2][1]))
     except BlockingIOError:
         print('sblarf1 :(', sys.exc_info())
         pass

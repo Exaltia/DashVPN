@@ -8,33 +8,45 @@ import struct
 import fcntl
 import select
 import binascii
+from time import time
 def sender():
     print('sender ready')
-    sx = [(s2, (clientconfig['remotehost3'], int(clientconfig['remoteport3']))),
-          (s1, (clientconfig['remotehost2'], int(clientconfig['remoteport2']))),
-          (s, (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))]
+
+
     while True:
         #Take one connexion pop it and send it, allowing better tolerance against a link loss or flap
         try:
-            next = sx.pop(0)
+            sx2 = sx
+            # print('sender sx', len(sx))
+            # print('sender sx2', len(sx2))
+            # sleep(0.7)
+            next = sx2.pop(0)
             # next = sx[0]
             # print('sx lenght', len(sx), end='\r')
-            print('next!', next)
-            sleep(0.3)
-            sx.append(next)
+            # print('next!', next)
+            # sleep(0.3)
+            # print('next', next[1], 'type', type(next[1]))
+            # sleep(10)
+            sx2.append(next)
             next[0].sendto(out_queue.pop(0), next[1])
         except IndexError:
-            print('index error!')
+            # print('index error!')
             sleep(0.0001)
         except KeyboardInterrupt:
             sys.exit(0)
         except:
+
             print(sys.exc_info())
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
+            sleep(10)
 def taphandling():
     next_one_out = 0
     next_one_in = 0
     inputs = [tap]
     outputs = [tap]
+
     print('tap handling ready!')
     while True:
         try:
@@ -155,8 +167,18 @@ def starting():
     except KeyboardInterrupt:
         sys.exit(0)
     except:
+
         print(sys.exc_info())
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+        print(exc_type, fname, exc_tb.tb_lineno)
+        sleep(10)
 if __name__ == "__main__":
+    out_queue = []
+    tcp_in_queue = []
+    other_in_queue = []
+    # sx = []
+    lasttime = float()
     orderer_dict = {}
     clientconfig = {}
     with open('clientconfig.cfg') as clientclientconfig:
@@ -170,6 +192,7 @@ if __name__ == "__main__":
             else:
                 clientconfig[line[0]] = line[1]
         print('Configuration OK')
+
     my_timeout_value = 3
     rawotherend = []
     otherend = []
@@ -179,6 +202,7 @@ if __name__ == "__main__":
     s1.bind((clientconfig['localbind2'], 0))
     s2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     s2.bind((clientconfig['localbind3'], 0))
+
     TUNSETIFF = 0x400454ca
     TUNSETOWNER = TUNSETIFF + 2
     IFF_TUN = 0x0001
@@ -194,9 +218,19 @@ if __name__ == "__main__":
     print('Init ok, starting threads')
     mysender = _thread.start_new_thread(sender, ())
     mytaphandler = _thread.start_new_thread(taphandling, ())
+    sx = [(s2, (clientconfig['remotehost3'], int(clientconfig['remoteport3']))),
+          (s1, (clientconfig['remotehost2'], int(clientconfig['remoteport2']))),
+          (s, (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))]
+    # print('sx outside', sx)
+    # sleep(25)
+    print(sx)
+    print(s2 not in sx, s1 not in sx, s not in sx)
+    print('True if sockets not found in the list')
+    sleep(15)
     nextsocket = 1
     s.settimeout(my_timeout_value)
     try:
+        connstate = [2, 2, 2] # Assuming that all links are working at the client start
         inputs = [s, s1, s2]
         outputs = []
         exception_sockets = []
@@ -204,9 +238,10 @@ if __name__ == "__main__":
         tcp_in_queue = []
         other_in_queue = []
         while True:
-            readable, writable, exceptional = select.select(inputs, outputs, exception_sockets, 5)
+            readable, writable, exceptional = select.select(inputs, outputs, inputs, 5)
             # print('readable', readable)
             # sleep(0.3)
+            diff = set(readable) ^ set(inputs)
             if readable:
                 # print('timeout value', s.gettimeout())
                 # print('still readable!')
@@ -214,6 +249,21 @@ if __name__ == "__main__":
                 for each in readable:
                     try:
                         preprocess = each.recv(1500)
+                        # if preprocess == b'RECONNECTED':
+                        #     sx.append((each, (clientconfig['remotehost1'], int(clientconfig['remoteport1']))))
+                        if preprocess == b'PONG':
+                            if each == s and connstate[0] <= 2:
+                                print('pong from s')
+                                connstate[0] = 2
+                                each.sendto(bytes('PING', 'ascii'), (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))
+                            elif each == s1 and connstate[1] <= 2:
+                                print('pong from s1')
+                                connstate[1] = 2
+                                each.sendto(bytes('PING', 'ascii'), (clientconfig['remotehost2'], int(clientconfig['remoteport2'])))
+                            elif each == s2 and connstate[2] <= 2:
+                                print('pong from s2')
+                                connstate[2] = 2
+                                each.sendto(bytes('PING', 'ascii'), (clientconfig['remotehost3'], int(clientconfig['remoteport3'])))
                         # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp
                         if b'&' in preprocess and not preprocess.startswith(b'other'):
                             tcp_in_queue.append(preprocess)
@@ -221,10 +271,96 @@ if __name__ == "__main__":
                             other_in_queue.append(preprocess)
                     except UnicodeDecodeError:
                         sleep(0.0001)
+                for each in diff:
+                    # We want to not remove the link from the available ones too fast, so we need 2 passes before removing the connection from the list of the available ones
+                    try:
+                        if lasttime < time() - my_timeout_value:
+                            # print('diff', diff, 'connstate', connstate)
+
+                            lasttime = time()
+                            if each == s and connstate[0] == 2:
+                                # s('ping from s')
+                                if each in sx:
+                                    print('s in!')
+                                    each.sendto(bytes('PING', 'ascii'), (clientconfig['remotehost2'], int(clientconfig['remoteport2'])))
+                                    connstate[0] -= 1
+                                else:
+                                    # print(sx)
+                                    # print('s not in?')
+                                    print('s', s not in sx)
+                                    sx.append((each, (clientconfig['remotehost1'], int(clientconfig['remoteport1']))))
+                                    each.sendto(bytes('RECONNECT', 'ascii'), (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))
+                            if each == s1 and connstate[1] == 2:
+                                print('sx', sx)
+                                if s1 not in sx:
+                                    print('s1', s1 not in sx)
+                                    # print('s1 not in?')
+                                    sx.append((each, (clientconfig['remotehost2'], int(clientconfig['remoteport2']))))
+                                    each.sendto(bytes('RECONNECT', 'ascii'), (clientconfig['remotehost2'], int(clientconfig['remoteport2'])))
+                                # print('ping from s1')
+                                each.sendto(bytes('PING', 'ascii'), (clientconfig['remotehost2'], int(clientconfig['remoteport2'])))
+                                connstate[1] -= 1
+                            if each == s2 and connstate[2] == 2:
+                                # print('ping from s2')
+                                if s2 not in sx:
+                                    print('s2', s2 not in sx)
+                                    sx.append((each, (clientconfig['remotehost3'], int(clientconfig['remoteport3']))))
+                                    each.sendto(bytes('RECONNECT', 'ascii'), (clientconfig['remotehost3'], int(clientconfig['remoteport3'])))
+                                each.sendto(bytes('PING', 'ascii'), (clientconfig['remotehost3'], int(clientconfig['remoteport3'])))
+                                connstate[2] -= 1
+                            if connstate[0] == 0:
+                                if lasttime < time() - my_timeout_value *2:
+                                    print('s removed')
+                                    sx.pop(sx.index(s))
+                                    # connstate[0] = 0
+                                # exception_sockets.append(inputs.pop(inputs.index(s)))
+                            if connstate[1] == 0:
+                                if lasttime < time() - my_timeout_value *2:
+                                    print('s1 removed')
+                                    sx.pop(sx.index(s1))
+                                    # connstate[1] = 0
+                                # exception_sockets.append(inputs.pop(inputs.index(s1)))
+                            if connstate[2] == 0:
+                                if lasttime < time() - my_timeout_value *2:
+                                    print('s2 removed')
+                                    sx.pop(sx.index(s2))
+                                    # connstate[2] = 0
+                                # exception_sockets.append(inputs.pop(inputs.index(s2)))
+                    except ValueError:
+                        sleep(0.001)
+                    except:
+                        print(sys.exc_info())
+                        exc_type, exc_obj, exc_tb = sys.exc_info()
+                        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                        print(exc_type, fname, exc_tb.tb_lineno)
+                        sleep(10)
+                        pass
+                # if exceptional:
+                #     for each in exceptional:
+                #         if each == s and connstate[0] > 0:
+                #             inputs.append(exception_sockets.pop(exception_sockets.index(s)))
+                #             each.sendto(bytes('RECONNECT', 'ascii'), (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))
+                #         elif each == s1 and connstate[1] > 0:
+                #             # sx.append((s1, (clientconfig['remotehost2'], int(clientconfig['remoteport2']))))
+                #             inputs.append(exception_sockets.pop(exception_sockets.index(s1)))
+                #             each.sendto(bytes('RECONNECT', 'ascii'), (clientconfig['remotehost2'], int(clientconfig['remoteport2'])))
+                #         elif each == s2 and connstate[2] > 0:
+                #             # sx.append((s2, (clientconfig['remotehost3'], int(clientconfig['remoteport3']))))
+                #             inputs.append(exception_sockets.pop(exception_sockets.index(s2)))
+                #             each.sendto(bytes('RECONNECT', 'ascii'), (clientconfig['remotehost3'], int(clientconfig['remoteport3'])))
             sleep(0.0001)
-            # if not readable:
-            #     for each in inputs:
-            #         if already_pinged == 0:
+            if not readable:
+                print('not readable')
+                for each in inputs:
+                    if lasttime < time() - my_timeout_value / 2:
+                        lasttime = time()
+                        if each == s:
+                            each.sendto(bytes('PING', 'ascii'), (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))
+                        elif each == s1:
+                            each.sendto(bytes('PING', 'ascii'), (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))
+                        elif each == s2:
+                            each.sendto(bytes('PING', 'ascii'), (clientconfig['remotehost1'], int(clientconfig['remoteport1'])))
+
 
 
     except TimeoutError:
