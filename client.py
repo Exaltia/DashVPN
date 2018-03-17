@@ -288,12 +288,14 @@ if __name__ == "__main__":
                         preprocess = each.recvfrom(1500)
                         if preprocess[0] == b'PONG':
                             for each in myconfig.sections():
-                                if preprocess[1][1] in myconfig[each]['remoteport'] and connstate[each] <= 2:
+                                print(connstate)
+                                #like the server, connstate is a tuple inside a dict entry
+                                if str(preprocess[1][1]) in myconfig[each]['remoteport'] and connstate[each][0] <= 2:
                                     print('pong from s')
                                     connstate[each] = 2
                         elif preprocess[0] == b'PING':
                             for each in myconfig.sections():
-                                if preprocess[1][1] in myconfig[each]['remoteport'] and connstate[each] <= 2:
+                                if str(preprocess[1][1]) in myconfig[each]['remoteport'] and connstate[each][0] <= 2:
                                     print('pong from s')
                                     connstate[each] = 2
                         elif preprocess[0] == b'RECONNECTED':
