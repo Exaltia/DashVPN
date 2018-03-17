@@ -259,7 +259,7 @@ if __name__ == "__main__":
                         if lasttime < time() - my_timeout_value /2 :
                             lasttime = time()
                             for entry in myconfig.sections():
-                                if myconfig[entry]['remoteport'] in str(each.getpeername()[1]):
+                                if myconfig[entry]['localbind'] in str(each.getsockname()[0]):
                                     if connstate[entry] <= 2 and connstate[entry] > 0:
                                         each.send(bytes('PING', 'ascii'))
                                         print('found entry', entry)
@@ -287,10 +287,9 @@ if __name__ == "__main__":
                     if lasttime < time() - my_timeout_value / 2:
                         lasttime = time()
                         for entry in myconfig.sections():
-                            for subentry in myconfig[entry]['remoteport']:
-                                if myconfig[entry][subentry] in str(each.getpeername()[1]):
-                                    each.send(bytes('PING', 'ascii'))
-                                    connstate[entry] =-1
+                            # forsubentry in myconfig[entry]['remoteport']:
+                            if myconfig[entry]['localbind'] in str(each.getsockname()[0]):
+                                each.sendto(bytes('PING', 'ascii'), (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport'])))
     except TimeoutError:
         print('timeout error!')
     except BlockingIOError:
