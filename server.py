@@ -180,19 +180,21 @@ if __name__ == "__main__":
                         elif preprocess[0] == b'RECONNECT':
                             print('reconnecting')
                             for entry in myconfig.sections():
-                                if each.getsockname()[1] in myconfig[entry]['localport'] and connstate[entry] <= 2:
+                                if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
                                     connstate[entry] = 2, preprocess[1]
                                     output_sockets.append(each)
                                     each.send(bytes('RECONNECTED', 'ascii'))
                         elif preprocess[0] == b'PING':
                             for entry in myconfig.sections():
-                                if each.getsockname()[1] in myconfig[entry]['localport'] and connstate[entry] <= 2:
+                                print(connstate[entry])
+                                # sleep(10)
+                                if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
                                     print('pong from s')
                                     connstate[entry] = 2, preprocess[1]
                                     each.send(bytes('PONG', 'ascii'))
                         elif preprocess[0] == b'PONG':
                             for entry in myconfig.sections():
-                                if each.getsockname()[1] in myconfig[entry]['localport'] and connstate[entry] <= 2:
+                                if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
                                     print('pong from s')
                                     connstate[entry] = 2, preprocess[1]
                         # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp
