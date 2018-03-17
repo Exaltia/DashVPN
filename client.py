@@ -113,6 +113,8 @@ def taphandling():
                         tap.write(to_write[1])
                     if other_in_queue:
                         to_write = other_in_queue.pop(0)
+                        print('to write', to_write)
+                        sleep(15)
                         to_write = to_write.split(b'&', 1)
                         tap.write(to_write[1])
                     sleep(0.0001)
@@ -143,46 +145,96 @@ def starting():
         inputs = all_sockets
         print('ca try')
         print('len connstate', len(connstate))
-        while len(connstate) <= 3:
-            try:
-                print('boucle true')
-                sleep(1)
-                print('inputs', inputs)
-                sleep(1)
-                readable, writable, exceptional = select.select(inputs, outputs, inputs)
-                if readable:
-                    print('readable')
-                    for each in readable:
-                        packet = each.recvfrom(1500)
-                        for configentry in myconfig.sections():
-                            print('entry')
-                            if connstate[configentry]['remoteport'] in packet[1][1]:#Can't reuse entry as first parameter for for, it is shadowed
-                                print('there is something')
-                                print(connstate[entry])
-                                sleep(5)
-                                pass
-                            elif packet == b'Got#Blanacetonport':
-                                connstate[configentry] = 2, packet[1]
-
-                else:
-                    for each in all_sockets:
-                        for configentry in myconfig.sections():
-                            print('configentry', configentry)
-                            sleep(1)
-                            if myconfig[configentry]['localbind'] in str(each.getsockname()[0]):
-                                print('send message')
-                                each.sendto(bytes('#Blanacetonport', 'ascii'), (myconfig[configentry]['remotehost'], int(myconfig[configentry]['remoteport'])))
-                                sleep(0.001)
-            # print('end')
-            except KeyboardInterrupt:
-                sys.exit(0)
-            except OSError:
-                sleep(0.001)
-    except KeyboardInterrupt:
-        sys.exit(0)
+        while len(connstate) < 3:
+            for startsocket in all_sockets:
+                for configentry in myconfig.sections():
+                    if myconfig[configentry]['localbind'] in startsocket.getsockname()[0]:
+                        startsocket.sendto(bytes('#Blanacetonport', 'ascii'), (myconfig[configentry]['remotehost'], int(myconfig[configentry]['remoteport'])))
+                        sleep(0.1)
+                        startpacket = startsocket.recvfrom(1500)
+                        if b'Got#Blanacetonport' in startpacket[0]:
+                            print('got packet')
+                            sleep(3)
+                            connstate[configentry] = 2, startpacket[1]
+                            startsocket.connect(startpacket[1])
+                            print('len connstate', len(connstate))
+                        else:
+                            print('debug', startpacket)
+                            sleep(10)
     except:
         print('global error starting')
-        pass
+        print(sys.exc_info())
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+        print(exc_type, fname, exc_tb.tb_lineno)
+        sleep(1)
+            # try:
+            #     print('boucle true')
+            #     # sleep(1)
+            #     print('inputs', inputs)
+            #     # sleep(1)
+            #     readable, writable, exceptional = select.select(inputs, outputs, inputs)
+            #     for startsocket in all_sockets:
+            #         for configentry in myconfig.sections():
+            #             print('configentry', configentry)
+            #             # sleep(1)
+            #             if myconfig[configentry]['localbind'] in str(startsocket.getsockname()[0]):
+            #                 print('send message')
+            #                 startsocket.sendto(bytes('#Blanacetonport', 'ascii'), (myconfig[configentry]['remotehost'], int(myconfig[configentry]['remoteport'])))
+            #                 print('connstate from send', connstate)
+            #                 sleep(0.001)
+            #         while readable:
+            #             print('readable')
+            #             for mysocket in readable: #Don't use each, shadowed!
+            #                 packet = mysocket.recvfrom(1500)
+            #                 for configentry in myconfig.sections():
+            #                     print('entry')
+            #                     try:
+            #                         print('type', type(connstate))
+            #                         # sleep(10)
+            #                         print('packet type', type(packet[1][1]))
+            #                         sleep(5)
+            #                         if connstate[configentry]['remoteport'] in str(packet[1][1]):#Can't reuse entry as first parameter for for, it is shadowed
+            #
+            #                             print('there is something')
+            #                             print(connstate[entry])
+            #                             # sleep(5)
+            #                             # pass
+            #                     except KeyError:
+            #                         sleep(0.001)
+            #                     except TypeError:
+            #                         print('type error :(', print(packet))
+            #                         sleep(30)
+            #                     if packet[0] == b'Got#Blanacetonport':
+            #                         print('got answer')
+            #                         connstate[configentry] = 2, packet[1]
+
+
+                # else:
+                    # for each in all_sockets:
+                    #     for configentry in myconfig.sections():
+                    #         print('configentry', configentry)
+                    #         # sleep(1)
+                    #         if myconfig[configentry]['localbind'] in str(each.getsockname()[0]):
+                    #             print('send message')
+                    #             each.sendto(bytes('#Blanacetonport', 'ascii'), (myconfig[configentry]['remotehost'], int(myconfig[configentry]['remoteport'])))
+                    #             print('connstate from send', connstate)
+                    #             sleep(0.001)
+            # print('end')
+    #         except KeyboardInterrupt:
+    #             sys.exit(0)
+    #         except OSError:
+    #             sleep(0.001)
+    # except KeyboardInterrupt:
+    #     sys.exit(0)
+    # except:
+    #     print('global error starting')
+    #     print(sys.exc_info())
+    #     exc_type, exc_obj, exc_tb = sys.exc_info()
+    #     fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+    #     print(exc_type, fname, exc_tb.tb_lineno)
+    #     sleep(1)
+    #     pass
 if __name__ == "__main__":
     output_sockets = []
     myconfig = configparser.ConfigParser()
