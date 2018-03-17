@@ -191,7 +191,7 @@ if __name__ == "__main__":
                                 if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
                                     print('pong from s')
                                     connstate[entry] = 2, preprocess[1]
-                                    each.send(bytes('PONG', 'ascii'))
+                                    each.sendto(bytes('PONG', 'ascii'), preprocess[1])
                         elif preprocess[0] == b'PONG':
                             for entry in myconfig.sections():
                                 if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
