@@ -156,7 +156,7 @@ def starting():
                             print('got packet')
                             sleep(3)
                             connstate[configentry] = 2, startpacket[1]
-                            startsocket.connect(startpacket[1])
+                            # startsocket.connect(startpacket[1])
                             print('len connstate', len(connstate))
                         else:
                             print('debug', startpacket)
@@ -292,12 +292,12 @@ if __name__ == "__main__":
                                 #like the server, connstate is a tuple inside a dict entry
                                 if str(preprocess[1][1]) in myconfig[each]['remoteport'] and connstate[each][0] <= 2:
                                     print('pong from s')
-                                    connstate[each] = 2
+                                    connstate[each] = 2, preprocess[1]
                         elif preprocess[0] == b'PING':
                             for each in myconfig.sections():
                                 if str(preprocess[1][1]) in myconfig[each]['remoteport'] and connstate[each][0] <= 2:
                                     print('pong from s')
-                                    connstate[each] = 2
+                                    connstate[each] = 2, preprocess[1]
                         elif preprocess[0] == b'RECONNECTED':
                             output_sockets.append(each)
                         # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp

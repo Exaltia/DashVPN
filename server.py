@@ -10,13 +10,13 @@ import binascii
 import configparser
 def sender():
     print('sender ready')
-    output_sockets = all_sockets
+    # output_sockets = all_sockets
     while True:
         try:
             sx = output_sockets
             next = sx.pop(0)
             sx.append(next)
-            next.sendto(out_queue.pop(0), next[1])
+            next[0].sendto(out_queue.pop(0), next[1])
         except IndexError:
             sleep(0.0001)
         except KeyboardInterrupt:
@@ -174,10 +174,19 @@ if __name__ == "__main__":
                             for entry in myconfig.sections():
                                 if myconfig[entry]['localport'] in str(each.getsockname()[1]):
                                     connstate[entry] = 2, preprocess[1]
-                                    each.sendto(bytes('Got#Blanacetonport', 'ascii'), preprocess[1])
+                                    # each.connect(preprocess[1])
+                                    if connstate['initOK'] == 3:
+                                        for outsocket in output_sockets:
+                                            if each in outsocket:
+                                                output_sockets.pop(output_sockets.index(each))
+                                                output_sockets.append((each, preprocess[1]))
+                                    else:
+                                        output_sockets.append((each, preprocess[1]))
+                                each.sendto(bytes('Got#Blanacetonport', 'ascii'), preprocess[1])
                                 if len(connstate) == 3:
                                     connstate['initOK'] = 1
                         elif preprocess[0] == b'RECONNECT':
+                            #Todo: handling case where only the server is restarted, such case leading to client directly sending reconnect messages
                             print('reconnecting')
                             for entry in myconfig.sections():
                                 if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
@@ -202,6 +211,9 @@ if __name__ == "__main__":
                             tcp_in_queue.append(preprocess[0])
                         else:
                             other_in_queue.append(preprocess[0])
+                    except AttributeError:
+                        print(each)
+                        sleep(10)
                     except UnicodeDecodeError:
                         sleep(0.0001)
                 for each in diff:
