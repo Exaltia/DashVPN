@@ -12,7 +12,7 @@ import configparser
 from time import time
 def sender():
     print('sender ready')
-    output_sockets = all_sockets
+    # output_sockets = all_sockets
     while True:
         #Take one connexion pop it and send it, allowing better tolerance against a link loss or flap
         try:
@@ -28,9 +28,9 @@ def sender():
             # print('next', next[1], 'type', type(next[1]))
             # sleep(10)
             sx.append(next)
-            print('next', next)
+            # print('next', next)
             sleep(3)
-            next.send(out_queue.pop(0))
+            next[0].sendto(out_queue.pop(0), next[1])
         except IndexError:
             # print('index error!')
             sleep(0.0001)
@@ -109,13 +109,13 @@ def taphandling():
                     if tcp_in_queue:
                         in_queue_index = tcp_in_queue.index(min(tcp_in_queue)) #can't do in one line because it's bytes
                         to_write = tcp_in_queue.pop(in_queue_index)
-                        to_write = to_write.split(b'&', 1)
+                        to_write = to_write[0].split(b'&', 1)  # We receive data from recvfrom function, who is a tuple with the data then the sender, and we don't care of the later here
                         tap.write(to_write[1])
                     if other_in_queue:
                         to_write = other_in_queue.pop(0)
                         print('to write', to_write)
                         sleep(15)
-                        to_write = to_write.split(b'&', 1)
+                        to_write = to_write[0].split(b'&', 1)
                         tap.write(to_write[1])
                     sleep(0.0001)
                 except KeyError:
@@ -143,21 +143,23 @@ def starting():
     try:
         outputs = all_sockets
         inputs = all_sockets
-        print('ca try')
-        print('len connstate', len(connstate))
+        # print('ca try')
+        # print('len connstate', len(connstate))
         while len(connstate) < 3:
             for startsocket in all_sockets:
                 for configentry in myconfig.sections():
                     if myconfig[configentry]['localbind'] in startsocket.getsockname()[0]:
                         startsocket.sendto(bytes('#Blanacetonport', 'ascii'), (myconfig[configentry]['remotehost'], int(myconfig[configentry]['remoteport'])))
+                        print('still doing init...')
                         sleep(0.1)
                         startpacket = startsocket.recvfrom(1500)
                         if b'Got#Blanacetonport' in startpacket[0]:
-                            print('got packet')
-                            sleep(3)
-                            connstate[configentry] = 2, startpacket[1]
+                            # print('got packet')
+                            sleep(1)
+                            connstate[configentry] = [2, startpacket[1]]
+                            output_sockets.append((startsocket, startpacket[1]))
                             # startsocket.connect(startpacket[1])
-                            print('len connstate', len(connstate))
+                            # print('len connstate', len(connstate))
                         else:
                             print('debug', startpacket)
                             sleep(10)
@@ -240,13 +242,13 @@ if __name__ == "__main__":
     myconfig = configparser.ConfigParser()
     myconfig.read('clientconfig.cfg')
     all_sockets = []
-    print('myconfig', myconfig.sections())
+    # print('myconfig', myconfig.sections())
     for each in myconfig.sections():
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         s.bind((myconfig[each]['localbind'], 0))
         all_sockets.append(s)
-    print('all sockets', all_sockets)
-    print('configtest', myconfig[each])
+    # print('all sockets', all_sockets)
+    # print('configtest', myconfig[each])
     out_queue = []
     tcp_in_queue = []
     other_in_queue = []
@@ -267,7 +269,7 @@ if __name__ == "__main__":
     fcntl.fcntl(tap.fileno(), fcntl.F_SETFL, fl | os.O_NONBLOCK)
     connstate = {}
     starting()
-    print('len consnstate main', len(connstate))
+    # print('len consnstate main', len(connstate))
     print('Init ok, starting threads')
     mysender = _thread.start_new_thread(sender, ())
     mytaphandler = _thread.start_new_thread(taphandling, ())
@@ -288,23 +290,26 @@ if __name__ == "__main__":
                         preprocess = each.recvfrom(1500)
                         if preprocess[0] == b'PONG':
                             for each in myconfig.sections():
-                                print(connstate)
+                                # print(connstate)
                                 #like the server, connstate is a tuple inside a dict entry
                                 if str(preprocess[1][1]) in myconfig[each]['remoteport'] and connstate[each][0] <= 2:
-                                    print('pong from s')
-                                    connstate[each] = 2, preprocess[1]
+                                    # print('pong from s')
+                                    connstate[each] = [2, preprocess[1]]
                         elif preprocess[0] == b'PING':
                             for each in myconfig.sections():
                                 if str(preprocess[1][1]) in myconfig[each]['remoteport'] and connstate[each][0] <= 2:
-                                    print('pong from s')
-                                    connstate[each] = 2, preprocess[1]
+                                    # print('pong from s')
+                                    connstate[each] = [2, preprocess[1]]
                         elif preprocess[0] == b'RECONNECTED':
                             output_sockets.append(each)
                         # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp
                         if b'&' in preprocess and not preprocess.startswith(b'other'):
                             tcp_in_queue.append(preprocess)
-                        else:
+                        elif preprocess[0].startswith(b'other'):
                             other_in_queue.append(preprocess)
+                        else:
+                            sleep(0.001)
+                            pass
                     except UnicodeDecodeError:
                         sleep(0.0001)
                 for each in diff:
@@ -314,13 +319,13 @@ if __name__ == "__main__":
                             lasttime = time()
                             for entry in myconfig.sections():
                                 if myconfig[entry]['localbind'] in str(each.getsockname()[0]):
-                                    if connstate[entry] <= 2 and connstate[entry] > 0:
-                                        each.send(bytes('PING', 'ascii'))
-                                        print('found entry', entry)
-                                        connstate[entry] -= 1
+                                    if connstate[entry][0] <= 2 and connstate[entry][0] > 0:
+                                        each.sendto(bytes('PING', 'ascii'), (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport'])))
+                                        # print('found entry', entry)
+                                        connstate[entry][0] -= 1
                                     else:
                                         print('removing socket')
-                                        connstate[entry] = 0
+                                        connstate[entry][0] = 0
                                         output_sockets.pop(output_sockets.index(each))
                                         each.send(bytes('RECONNECT', 'ascii'))
 

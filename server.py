@@ -85,10 +85,11 @@ def taphandling():
                     if tcp_in_queue:
                         in_queue_index = tcp_in_queue.index(min(tcp_in_queue)) #can't do in one line because it's bytes
                         to_write = tcp_in_queue.pop(in_queue_index)
-                        to_write = to_write.split(b'&', 1)
+                        to_write = to_write.split(b'&', 1)  # We receive data from recv, not recvfrom function, who is a tuple with the data then the sender, and we don't care of the later here
                         tap.write(to_write[1])
                     if other_in_queue:
                         to_write = other_in_queue.pop()
+                        sleep(5)
                         to_write = to_write.split(b'&', 1)
                         tap.write(to_write[1])
                     sleep(0.0001)
@@ -100,6 +101,8 @@ def taphandling():
                     sleep(0.001)
                 except IndexError:
                     sleep(0.0001)
+                except AttributeError:
+                    print('to write error', to_write)
                 except:
                     print(sys.exc_info())
                     exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -161,7 +164,7 @@ if __name__ == "__main__":
         other_in_queue = []
         while True:
             readable, writable, exceptional = select.select(inputs, outputs, inputs)
-            print('results', inputs, outputs)
+            # print('results', inputs, outputs)
             diff = set(readable) ^ set(inputs)
             if readable:
                 for each in readable:
@@ -173,9 +176,9 @@ if __name__ == "__main__":
                             print('je balance')
                             for entry in myconfig.sections():
                                 if myconfig[entry]['localport'] in str(each.getsockname()[1]):
-                                    connstate[entry] = 2, preprocess[1]
+                                    connstate[entry] = [2, preprocess[1]]
                                     # each.connect(preprocess[1])
-                                    if connstate['initOK'] == 3:
+                                    if connstate['initOK'] == 1:
                                         for outsocket in output_sockets:
                                             if each in outsocket:
                                                 output_sockets.pop(output_sockets.index(each))
@@ -190,7 +193,7 @@ if __name__ == "__main__":
                             print('reconnecting')
                             for entry in myconfig.sections():
                                 if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
-                                    connstate[entry] = 2, preprocess[1]
+                                    connstate[entry] = [2, preprocess[1]]
                                     output_sockets.append(each)
                                     each.send(bytes('RECONNECTED', 'ascii'))
                         elif preprocess[0] == b'PING':
@@ -199,13 +202,13 @@ if __name__ == "__main__":
                                 # sleep(10)
                                 if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
                                     print('pong from s')
-                                    connstate[entry] = 2, preprocess[1]
+                                    connstate[entry] = [2, preprocess[1]]
                                     each.sendto(bytes('PONG', 'ascii'), preprocess[1])
                         elif preprocess[0] == b'PONG':
                             for entry in myconfig.sections():
                                 if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
                                     print('pong from s')
-                                    connstate[entry] = 2, preprocess[1]
+                                    connstate[entry] = [2, preprocess[1]]
                         # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp
                         elif b'&' in preprocess[0] and not preprocess[0].startswith(b'other'):
                             tcp_in_queue.append(preprocess[0])
@@ -254,7 +257,7 @@ if __name__ == "__main__":
                         for entry in myconfig.sections():
                             if myconfig[entry]['localport'] in str(each.getsockname()[1]):
                                 each.send(bytes('PING', 'ascii'))
-                                connstate[entry] =- 1
+                                connstate[entry][0] =- 1
     except KeyError:
         sleep(0.001)
     except BlockingIOError:
