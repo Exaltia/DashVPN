@@ -10,7 +10,6 @@ import binascii
 import configparser
 def sender():
     print('sender ready')
-    # output_sockets = all_sockets
     while True:
         try:
             sx = output_sockets
@@ -31,37 +30,18 @@ def connchecker():
         if lasttime < time() - my_timeout_value and len(connstate) == 4:
             lasttime = time()
             for each in inputs:
-                # print('len connstate', len(connstate))
-                # sleep(3)
-                # if connstate['initOK'] == 1:
-                #     print('init ok!')
                 # We want to not remove the link from the available ones too fast, so we need 2 passes before removing the connection from the list of the available ones, will still poping it out at the setted up time delay
                 try:
                     for entry in myconfig.sections():
-                        # for subentry in myconfig[entry]['remoteport']:
                         if myconfig[entry]['localport'] in str(each.getsockname()[1]):
-                            # print('connstate', connstate)
-                            # sleep(10)
-                            # print(connstate)
-                            # sleep(5)
                             if connstate[entry][0] <= 2 and connstate[entry][0] > 0:
-                                # print(connstate[entry][1])
-                                # sleep(5)
                                 each.sendto(bytes('PING', 'ascii'), connstate[entry][1])
-                                # print('found entry', entry)
                                 connstate[entry][0] -= 1
                             else:
                                 try:
-                                    # print(each)
                                     if (each, connstate[entry][1]) in output_sockets:
-                                        print('removing socket', connstate[entry])
                                         connstate[entry][0] = 0
                                         output_sockets.pop(output_sockets.index((each, connstate[entry][1])))
-                                        print('output sockets', output_sockets, 'connstate', connstate)
-                                    # else:
-                                    #     print('reconnecting')
-                                    #     each.sendto(bytes('RECONNECT', 'ascii'), (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport'])))
-                                    #     print('sent RECONNECT')
                                 except:
                                     print(sys.exc_info())
                                     print('error in else-if-else')
@@ -110,7 +90,7 @@ def taphandling():
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
-                    if version == 4:
+                    elif version == 4:
                         # 14 from ethernet header then 9 for the start of the protocol
                         isittcp = int(list(headerBytes[23:24])[0])
                         if isittcp == 6:
@@ -129,6 +109,8 @@ def taphandling():
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
+                    else:
+                        out_queue.append(bytes('other&', 'ascii') + packet) # We don't care of the order if this is not tcp
                 except:
                     print('error form tap ipv4 handling', sys.exc_info())
             else:
@@ -140,7 +122,6 @@ def taphandling():
                         tap.write(to_write[1])
                     if other_in_queue:
                         to_write = other_in_queue.pop()
-                        # sleep(5)
                         to_write = to_write.split(b'&', 1)
                         tap.write(to_write[1])
                     sleep(0.0001)
@@ -177,14 +158,12 @@ if __name__ == "__main__":
     all_sockets = []
     print('myconfig', myconfig.sections())
     for each in myconfig.sections():
-        # connstate[each] = 0
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         s.bind((myconfig[each]['localbind'], int(myconfig[each]['localport'])))
         all_sockets.append(s)
     out_queue = []
     tcp_in_queue = []
     other_in_queue = []
-    # lasttime = float()
     my_timeout_value = 3
     rawotherend = []
     otherend = []
@@ -196,7 +175,6 @@ if __name__ == "__main__":
     tap = open("/dev/net/tun", "r+b",  buffering=0) #os.open is for python 2 ONLY!, it's open in python3
     ifr = struct.pack('16sH', 'pyvpn0'.encode(), IFF_TAP | IFF_NO_PI)
     funcreturn = fcntl.ioctl(tap, TUNSETIFF, ifr)
-    # print('funcreturn', funcreturn)
     second_func_return = fcntl.ioctl(tap, TUNSETOWNER, 1000)
     fl = fcntl.fcntl(tap.fileno(), fcntl.F_GETFL)
     fcntl.fcntl(tap.fileno(), fcntl.F_SETFL, fl | os.O_NONBLOCK)
@@ -216,21 +194,14 @@ if __name__ == "__main__":
         other_in_queue = []
         while True:
             readable, writable, exceptional = select.select(inputs, outputs, inputs)
-            # print('results', inputs, outputs)
-            # diff = set(readable) ^ set(inputs)
             if readable:
                 for each in readable:
                     try:
-                        # print('readable')
                         preprocess = each.recvfrom(1500)
-                        # print('packet', preprocess)
                         if preprocess[0] == b'#Blanacetonport':
-                            # print('je balance')
                             for entry in myconfig.sections():
                                 if myconfig[entry]['localport'] in str(each.getsockname()[1]):
-                                    # print('there')
                                     connstate[entry] = [2, preprocess[1]]
-                                    # each.connect(preprocess[1])
                                     if connstate['initOK'] == 1:
                                         for outsocket in output_sockets:
                                             if each in outsocket:
@@ -251,24 +222,18 @@ if __name__ == "__main__":
                                     print('output sockets', output_sockets)
                                     each.sendto(bytes('RECONNECTED', 'ascii'), preprocess[1])
                         elif preprocess[0] == b'PING':
-                            # print('pinged!!')
                             for entry in myconfig.sections():
-                                # print(connstate[entry])
-                                # sleep(10)
                                 if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
-                                    # print('pong from ', preprocess[1])
                                     connstate[entry] = [2, preprocess[1]]
                                     each.sendto(bytes('PONG', 'ascii'), preprocess[1])
                         elif preprocess[0] == b'PONG':
                             for entry in myconfig.sections():
                                 if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
-                                    # print('pong from ', preprocess[1])
                                     connstate[entry] = [2, preprocess[1]]
                         # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp
                         elif b'&' in preprocess[0] and not preprocess[0].startswith(b'other'):
                             tcp_in_queue.append(preprocess[0])
                         else:
-                            # print('je tombe dans un else generique')
                             other_in_queue.append(preprocess[0])
                     except AttributeError:
                         print('attribute error', each)
@@ -278,15 +243,6 @@ if __name__ == "__main__":
                     except:
                         print('readable global error')
                         print(sys.exc_info())
-
-            # if not readable and connstate['initOK'] == 1:
-            #     for each in inputs:
-            #         if lasttime < time() - my_timeout_value / 2:
-            #             lasttime = time()
-            #             for entry in myconfig.sections():
-            #                 if myconfig[entry]['localport'] in str(each.getsockname()[1]):
-            #                     each.send(bytes('PING', 'ascii'))
-            #                     connstate[entry][0] =- 1
     except KeyError:
         sleep(0.001)
     except BlockingIOError:
