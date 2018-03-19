@@ -79,6 +79,7 @@ def taphandling():
                     version = '{0:0{1}b}'.format(version,1*8)  # IP version number is 4 bytes, we must transforme the byte in bits to ensure correct calculation of Ip version
                     version = version[0:4]
                     version = int(version, 2)
+                    # print('version', version)
                     if version == 6:
                         isittcp = int(list(headerBytes[20:21])[0])
                         if isittcp == 6:
@@ -105,7 +106,7 @@ def taphandling():
                             seqnumber = binascii.hexlify(seqnumber)
                             if seqnumber:  # Because it trow a value error if seqnumber is empty
                                 seqnumber = int(seqnumber, 16) #base16, input is hex, and we want a plain number
-                            out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
+                                out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)

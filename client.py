@@ -42,6 +42,8 @@ def taphandling():
                     #Todo : Tun mode, where we need to remove 14 bytes of ethernet header
                     #Todo : ipv4 mode, where we need to remove another 20 bytes of ip header and look at the 9th byte for "Protocol"(called next header in IPv6) instead of the 6th byte, but still wanting to find 6 in either cases(TCP)
                     packet = tap.read(1500)
+                    # print(packet)
+                    # sleep(1)
                     headerLength = 74 #14(ethernet)+40(ipv6)+20(something else, including tcp, because we want to search in tcp header without options)
                     headerBytes = packet[0:headerLength] #We are getting an ethernet frame containing ip(v6) then something else
                     # We get the service type
@@ -50,6 +52,7 @@ def taphandling():
                     version = '{0:0{1}b}'.format(version,1*8)  # IP version number is 4 bytes, we must transforme the byte in bits to ensure correct calculation of Ip version
                     version = version[0:4]
                     version = int(version, 2)
+
                     if version == 6:
                         isittcp = int(list(headerBytes[20:21])[0])
                         if isittcp == 6:
@@ -58,7 +61,8 @@ def taphandling():
                             if seqnumber:  # Because it trow a value error if seqnumber is empty
                                 seqnumber = int(seqnumber, 16) #base16, input is hex, and we want a plain number
                                 # print('seqnumber ipv6', seqnumber)
-                                out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
+                                # because packets are sent over unequal links, and tcp doesn't like unordered packets
+                                out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
@@ -77,8 +81,9 @@ def taphandling():
                             seqnumber = headerBytes[14+ihl+4:14+ihl+8]  # tcp sequence number position, in bytes
                             seqnumber = binascii.hexlify(seqnumber)
                             if seqnumber:  # Because it trow a value error if seqnumber is empty
+                                # because packets are sent over unequal links, and tcp doesn't like unordered packets
                                 seqnumber = int(seqnumber, 16) #base16, input is hex, and we want a plain number
-                            out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
+                                out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
@@ -170,8 +175,6 @@ def starting():
                         sleep(0.1)
                         startpacket = startsocket.recvfrom(1500)
                         if b'Got#Blanacetonport' in startpacket[0]:
-                            # print('got packet')
-                            # sleep(1)
                             connstate[configentry] = [2, startpacket[1]]
                             output_sockets.append((startsocket, startpacket[1]))
                         else:
@@ -248,7 +251,7 @@ if __name__ == "__main__":
                                     connstate[each] = [2, preprocess[1]]
                                     output_sockets.append((each, (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport']))))
                         # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp
-                        if b'&' in preprocess and not preprocess.startswith(b'other'):
+                        elif b'&' in preprocess[0] and not preprocess[0].startswith(b'other'):
                             tcp_in_queue.append(preprocess)
                         elif preprocess[0].startswith(b'other'):
                             other_in_queue.append(preprocess)
