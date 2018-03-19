@@ -87,7 +87,7 @@ def taphandling():
                             seqnumber = binascii.hexlify(seqnumber)
                             if seqnumber:  # Because it trow a value error if seqnumber is empty
                                 seqnumber = int(seqnumber, 16) #base16, input is hex, and we want a plain number
-                                out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
+                            out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
@@ -106,7 +106,7 @@ def taphandling():
                             seqnumber = binascii.hexlify(seqnumber)
                             if seqnumber:  # Because it trow a value error if seqnumber is empty
                                 seqnumber = int(seqnumber, 16) #base16, input is hex, and we want a plain number
-                                out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
+                            out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)

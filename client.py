@@ -62,7 +62,7 @@ def taphandling():
                                 seqnumber = int(seqnumber, 16) #base16, input is hex, and we want a plain number
                                 # print('seqnumber ipv6', seqnumber)
                                 # because packets are sent over unequal links, and tcp doesn't like unordered packets
-                                out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)
+                            out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
@@ -83,7 +83,7 @@ def taphandling():
                             if seqnumber:  # Because it trow a value error if seqnumber is empty
                                 # because packets are sent over unequal links, and tcp doesn't like unordered packets
                                 seqnumber = int(seqnumber, 16) #base16, input is hex, and we want a plain number
-                                out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)
+                            out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
@@ -97,6 +97,8 @@ def taphandling():
                         in_queue_index = tcp_in_queue.index(min(tcp_in_queue)) #can't do in one line because it's bytes
                         to_write = tcp_in_queue.pop(in_queue_index)
                         to_write = to_write[0].split(b'&', 1)  # We receive data from recvfrom function, who is a tuple with the data then the sender, and we don't care of the later here
+                        # print('next', in_queue_index, end='\r')
+                        # sleep(0.3)
                         tap.write(to_write[1])
                     if other_in_queue:
                         to_write = other_in_queue.pop(0)
