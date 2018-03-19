@@ -77,9 +77,11 @@ def taphandling():
                                 seqnumber = int(seqnumber, 16) #base16, input is hex, and we want a plain number
                                 # print('seqnumber ipv6', seqnumber)
                                 out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
+                                print('in out queue tcp6')
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
+                            print('in out queue other6')
 
                     if version == 4:
                         # 14 from ethernet header then 9 for the start of the protocol
@@ -97,11 +99,11 @@ def taphandling():
                             if seqnumber:  # Because it trow a value error if seqnumber is empty
                                 seqnumber = int(seqnumber, 16) #base16, input is hex, and we want a plain number
                             out_queue.append(bytes(str(seqnumber) + '&', 'ascii') + packet)  # because packets are sent over unequal links, and tcp doesn't like unordered packets
+                            print('in out queue tcp4')
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
-                    else:
-                        out_queue.append(bytes('other&', 'ascii') + packet) # We don't care of the order if this is not tcp
+                            print('in out queue other4')
                 except:
                     print('error form tap ipv4 handling', sys.exc_info())
             else:

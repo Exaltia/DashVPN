@@ -129,8 +129,6 @@ def taphandling():
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
-                    else:
-                        out_queue.append(bytes('other&', 'ascii') + packet)  # We don't care of the order if this is not tcp
                 except:
                     print('error form tap ipv4 handling', sys.exc_info())
             else:
