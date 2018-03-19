@@ -25,6 +25,59 @@ def sender():
             print('problem in sender')
             print(sys.exc_info())
     sleep(0.001)
+def connchecker():
+    lasttime = time()
+    while True:
+        if lasttime < time() - my_timeout_value and len(connstate) == 4:
+            lasttime = time()
+            for each in inputs:
+                # print('len connstate', len(connstate))
+                # sleep(3)
+                # if connstate['initOK'] == 1:
+                #     print('init ok!')
+                # We want to not remove the link from the available ones too fast, so we need 2 passes before removing the connection from the list of the available ones, will still poping it out at the setted up time delay
+                try:
+                    for entry in myconfig.sections():
+                        # for subentry in myconfig[entry]['remoteport']:
+                        if myconfig[entry]['localport'] in str(each.getsockname()[1]):
+                            # print('connstate', connstate)
+                            # sleep(10)
+                            # print(connstate)
+                            # sleep(5)
+                            if connstate[entry][0] <= 2 and connstate[entry][0] > 0:
+                                # print(connstate[entry][1])
+                                # sleep(5)
+                                each.sendto(bytes('PING', 'ascii'), connstate[entry][1])
+                                # print('found entry', entry)
+                                connstate[entry][0] -= 1
+                            else:
+                                try:
+                                    # print(each)
+                                    if (each, connstate[entry][1]) in output_sockets:
+                                        print('removing socket', connstate[entry])
+                                        connstate[entry][0] = 0
+                                        output_sockets.pop(output_sockets.index((each, connstate[entry][1])))
+                                        print('output sockets', output_sockets, 'connstate', connstate)
+                                    # else:
+                                    #     print('reconnecting')
+                                    #     each.sendto(bytes('RECONNECT', 'ascii'), (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport'])))
+                                    #     print('sent RECONNECT')
+                                except:
+                                    print(sys.exc_info())
+                                    print('error in else-if-else')
+                                print('skipping previous else')
+                except ValueError:
+                    print('value error in conncheck')
+                    sleep(0.001)
+                except:
+                    print('global error', sys.exc_info())
+                    print(sys.exc_info())
+                    exc_type, exc_obj, exc_tb = sys.exc_info()
+                    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                    print(exc_type, fname, exc_tb.tb_lineno)
+                    sleep(10)
+                    pass
+        sleep(1)
 def taphandling():
     inputs = [tap]
     outputs = [tap]
@@ -133,7 +186,7 @@ if __name__ == "__main__":
     out_queue = []
     tcp_in_queue = []
     other_in_queue = []
-    lasttime = float()
+    # lasttime = float()
     my_timeout_value = 3
     rawotherend = []
     otherend = []
@@ -145,7 +198,7 @@ if __name__ == "__main__":
     tap = open("/dev/net/tun", "r+b",  buffering=0) #os.open is for python 2 ONLY!, it's open in python3
     ifr = struct.pack('16sH', 'pyvpn0'.encode(), IFF_TAP | IFF_NO_PI)
     funcreturn = fcntl.ioctl(tap, TUNSETIFF, ifr)
-    print('funcreturn', funcreturn)
+    # print('funcreturn', funcreturn)
     second_func_return = fcntl.ioctl(tap, TUNSETOWNER, 1000)
     fl = fcntl.fcntl(tap.fileno(), fcntl.F_GETFL)
     fcntl.fcntl(tap.fileno(), fcntl.F_SETFL, fl | os.O_NONBLOCK)
@@ -153,6 +206,7 @@ if __name__ == "__main__":
     print('Init OK')
     mysender = _thread.start_new_thread(sender, ())
     mytaphandler = _thread.start_new_thread(taphandling, ())
+    myconnchecker = _thread.start_new_thread(connchecker, ())
     nextsocket = 1
     connstate['initOK'] = 0
     try:
@@ -165,27 +219,27 @@ if __name__ == "__main__":
         while True:
             readable, writable, exceptional = select.select(inputs, outputs, inputs)
             # print('results', inputs, outputs)
-            diff = set(readable) ^ set(inputs)
+            # diff = set(readable) ^ set(inputs)
             if readable:
                 for each in readable:
                     try:
-                        print('readable')
+                        # print('readable')
                         preprocess = each.recvfrom(1500)
-                        print('packet', preprocess)
+                        # print('packet', preprocess)
                         if preprocess[0] == b'#Blanacetonport':
-                            print('je balance')
+                            # print('je balance')
                             for entry in myconfig.sections():
                                 if myconfig[entry]['localport'] in str(each.getsockname()[1]):
-                                    print('there')
+                                    # print('there')
                                     connstate[entry] = [2, preprocess[1]]
                                     # each.connect(preprocess[1])
                                     if connstate['initOK'] == 1:
                                         for outsocket in output_sockets:
                                             if each in outsocket:
                                                 output_sockets.pop(output_sockets.index(each))
-                                                output_sockets.append((each, preprocess[1]))
+                                                output_sockets.append((each, (preprocess[1])))
                                     else:
-                                        output_sockets.append((each, preprocess[1]))
+                                        output_sockets.append((each, (preprocess[1])))
                                 each.sendto(bytes('Got#Blanacetonport', 'ascii'), preprocess[1])
                                 if len(connstate) == 3:
                                     connstate['initOK'] = 1
@@ -195,67 +249,38 @@ if __name__ == "__main__":
                             for entry in myconfig.sections():
                                 if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
                                     connstate[entry] = [2, preprocess[1]]
-                                    output_sockets.append(each)
+                                    output_sockets.append((each, (preprocess[1])))
+                                    print('output sockets', output_sockets)
                                     each.sendto(bytes('RECONNECTED', 'ascii'), preprocess[1])
                         elif preprocess[0] == b'PING':
+                            # print('pinged!!')
                             for entry in myconfig.sections():
-                                print(connstate[entry])
+                                # print(connstate[entry])
                                 # sleep(10)
                                 if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
-                                    print('pong from s')
+                                    # print('pong from ', preprocess[1])
                                     connstate[entry] = [2, preprocess[1]]
                                     each.sendto(bytes('PONG', 'ascii'), preprocess[1])
                         elif preprocess[0] == b'PONG':
                             for entry in myconfig.sections():
                                 if str(each.getsockname()[1]) in myconfig[entry]['localport'] and connstate[entry][0] <= 2:
-                                    print('pong from s')
+                                    # print('pong from ', preprocess[1])
                                     connstate[entry] = [2, preprocess[1]]
                         # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp
                         elif b'&' in preprocess[0] and not preprocess[0].startswith(b'other'):
                             tcp_in_queue.append(preprocess[0])
                         else:
+                            # print('je tombe dans un else generique')
                             other_in_queue.append(preprocess[0])
                     except AttributeError:
-                        print(each)
+                        print('attribute error', each)
                         # sleep(10)
                     except UnicodeDecodeError:
                         sleep(0.0001)
-                if lasttime < time() - my_timeout_value / 2 and len(connstate) == 4:
-                    lasttime = time()
-                    for each in inputs:
-                        print('len connstate', len(connstate))
-                        sleep(3)
-                        # if connstate['initOK'] == 1:
-                        #     print('init ok!')
-                        # We want to not remove the link from the available ones too fast, so we need 2 passes before removing the connection from the list of the available ones, will still poping it out at the setted up time delay
-                        try:
-                            for entry in myconfig.sections():
-                                # for subentry in myconfig[entry]['remoteport']:
-                                if myconfig[entry]['localport'] in str(each.getsockname()[1]):
-                                    print('connstate', connstate)
-                                    # sleep(10)
-                                    print(connstate)
-                                    sleep(5)
-                                    if connstate[entry][0] <= 2 and connstate[entry][0] > 0:
-                                        each.sendto(bytes('PING', 'ascii'), connstate[entry][1])
-                                        print('found entry', entry)
-                                        connstate[entry][0] -= 1
-                                    else:
-                                        print('removing socket')
-                                        connstate[entry][0] = 0
-                                        output_sockets.pop(output_sockets.index(each))
-                                        # each.send(bytes('RECONNECT', 'ascii'))
-                        except ValueError:
-                            sleep(0.001)
-                        except:
-                            print('global error', sys.exc_info())
-                            print(sys.exc_info())
-                            exc_type, exc_obj, exc_tb = sys.exc_info()
-                            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                            print(exc_type, fname, exc_tb.tb_lineno)
-                            sleep(10)
-                            pass
-            sleep(0.0001)
+                    except:
+                        print('readable global error')
+                        print(sys.exc_info())
+
             # if not readable and connstate['initOK'] == 1:
             #     for each in inputs:
             #         if lasttime < time() - my_timeout_value / 2:

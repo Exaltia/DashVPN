@@ -113,7 +113,7 @@ def taphandling():
                         tap.write(to_write[1])
                     if other_in_queue:
                         to_write = other_in_queue.pop(0)
-                        print('to write', to_write)
+                        # print('to write', to_write)
                         # sleep(15)
                         to_write = to_write[0].split(b'&', 1)
                         tap.write(to_write[1])
@@ -138,6 +138,49 @@ def taphandling():
             print('error from taphandling')
             print(sys.exc_info())
     sleep(0.001)
+def connchecker():
+    lasttime = time()
+    while True:
+        if lasttime < time() - my_timeout_value /2 :
+            lasttime = time()
+            for each in inputs:
+                # We want to not remove the link from the available ones too fast, so we need 2 passes before removing the connection from the list of the available ones, will still poping it out at the setted up time delay
+                try:
+                    for entry in myconfig.sections():
+                        if myconfig[entry]['localbind'] in str(each.getsockname()[0]):
+                            if connstate[entry][0] <= 2 and connstate[entry][0] > 0:
+                                each.sendto(bytes('PING', 'ascii'), (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport'])))
+                                # print('ping sent socket', each, 'to ', (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport'])))
+                                # print('found entry', entry)
+                                connstate[entry][0] -= 1
+                            else:
+                                try:
+                                    # print(each)
+                                    if (each, connstate[entry][1]) in output_sockets:
+                                        # print('removing socket', connstate[entry])
+                                        connstate[entry][0] = 0
+                                        output_sockets.pop(output_sockets.index((each, connstate[entry][1])))
+                                    else:
+                                        # print('reconnecting')
+                                        each.sendto(bytes('RECONNECT', 'ascii'), (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport'])))
+                                        print('sent RECONNECT')
+                                except:
+                                    print(sys.exc_info())
+                                    print('error in else-if-else')
+                                print('skipping previous else')
+
+                except ValueError:
+                    sleep(0.001)
+                except:
+                    print('except in conncheck')
+                    print(sys.exc_info())
+                    exc_type, exc_obj, exc_tb = sys.exc_info()
+                    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                    print(exc_type, fname, exc_tb.tb_lineno)
+                    sleep(10)
+                    pass
+
+        sleep(1)
 def starting():
     print('Initializing')
     try:
@@ -158,6 +201,7 @@ def starting():
                             # sleep(1)
                             connstate[configentry] = [2, startpacket[1]]
                             output_sockets.append((startsocket, startpacket[1]))
+                            # print('socket list', output_sockets)
                             # startsocket.connect(startpacket[1])
                             # print('len connstate', len(connstate))
                         else:
@@ -273,6 +317,7 @@ if __name__ == "__main__":
     print('Init ok, starting threads')
     mysender = _thread.start_new_thread(sender, ())
     mytaphandler = _thread.start_new_thread(taphandling, ())
+    myconnchecker = _thread.start_new_thread(connchecker, ())
     nextsocket = 1
     try:
         inputs = all_sockets
@@ -293,7 +338,7 @@ if __name__ == "__main__":
                                 # print(connstate)
                                 #like the server, connstate is a tuple inside a dict entry
                                 if str(preprocess[1][1]) in myconfig[each]['remoteport'] and connstate[each][0] <= 2:
-                                    # print('pong from s')
+                                    # print('pong from ', each)
                                     connstate[each] = [2, preprocess[1]]
                         elif preprocess[0] == b'PING':
                             for each in myconfig.sections():
@@ -301,8 +346,12 @@ if __name__ == "__main__":
                                     # print('pong from s')
                                     connstate[each] = [2, preprocess[1]]
                         elif preprocess[0] == b'RECONNECTED':
-                            print('got reconnected')
-                            output_sockets.append(each)
+                            for entry in myconfig.sections():
+                                if myconfig[entry]['localbind'] in each.getsockname()[0]:
+                                    # print('got reconnected', each.getsockname())
+                                    connstate[each] = [2, preprocess[1]]
+                                    output_sockets.append((each, (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport']))))
+                                    print(output_sockets)
                         # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp
                         if b'&' in preprocess and not preprocess.startswith(b'other'):
                             tcp_in_queue.append(preprocess)
@@ -312,38 +361,9 @@ if __name__ == "__main__":
                             sleep(0.001)
                             pass
                     except UnicodeDecodeError:
-                        sleep(0.0001)
-            if lasttime < time() - my_timeout_value /2 :
-                lasttime = time()
-                for each in inputs:
-                    # We want to not remove the link from the available ones too fast, so we need 2 passes before removing the connection from the list of the available ones, will still poping it out at the setted up time delay
-                    try:
-
-                            for entry in myconfig.sections():
-                                if myconfig[entry]['localbind'] in str(each.getsockname()[0]):
-                                    if connstate[entry][0] <= 2 and connstate[entry][0] > 0:
-                                        each.sendto(bytes('PING', 'ascii'), (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport'])))
-                                        # print('found entry', entry)
-                                        connstate[entry][0] -= 1
-                                    else:
-                                        print('removing socket', connstate[entry])
-                                        connstate[entry][0] = 0
-                                        print(each)
-                                        output_sockets.pop(output_sockets.index((each, connstate[entry][1])))
-                                        print('reconnecting')
-                                        each.sendto(bytes('RECONNECT', 'ascii'), myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport']))
-
-                    except ValueError:
                         sleep(0.001)
-                    except:
-                        print(sys.exc_info())
-                        exc_type, exc_obj, exc_tb = sys.exc_info()
-                        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                        print(exc_type, fname, exc_tb.tb_lineno)
-                        sleep(10)
-                        pass
+                sleep(0.001)
 
-            sleep(0.0001)
             # if not readable:
             #     print('not readable')
             #     for each in inputs:
