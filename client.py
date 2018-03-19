@@ -20,7 +20,7 @@ def sender():
             sx.append(next)
             next[0].sendto(out_queue.pop(0), next[1])
         except IndexError:
-            sleep(0.0001)
+            sleep(0.001)
         except KeyboardInterrupt:
             sys.exit(0)
         except:
@@ -52,7 +52,6 @@ def taphandling():
                     version = '{0:0{1}b}'.format(version,1*8)  # IP version number is 4 bytes, we must transforme the byte in bits to ensure correct calculation of Ip version
                     version = version[0:4]
                     version = int(version, 2)
-
                     if version == 6:
                         isittcp = int(list(headerBytes[20:21])[0])
                         if isittcp == 6:
@@ -66,7 +65,6 @@ def taphandling():
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
-
                     elif version == 4:
                         # 14 from ethernet header then 9 for the start of the protocol
                         isittcp = int(list(headerBytes[23:24])[0])
@@ -87,8 +85,9 @@ def taphandling():
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
-                    else:
+                    elif version < 4:
                         out_queue.append(bytes('other&', 'ascii') + packet) # We don't care of the order if this is not tcp
+                    sleep(0.001)
                 except:
                     print('error form tap ipv4 handling', sys.exc_info())
             else:
@@ -97,20 +96,20 @@ def taphandling():
                         in_queue_index = tcp_in_queue.index(min(tcp_in_queue)) #can't do in one line because it's bytes
                         to_write = tcp_in_queue.pop(in_queue_index)
                         to_write = to_write[0].split(b'&', 1)  # We receive data from recvfrom function, who is a tuple with the data then the sender, and we don't care of the later here
-                        # print('next', in_queue_index, end='\r')
+                        # print('next ', to_write[0])
                         # sleep(0.3)
                         tap.write(to_write[1])
                     if other_in_queue:
                         to_write = other_in_queue.pop(0)
                         to_write = to_write[0].split(b'&', 1)
                         tap.write(to_write[1])
-                    sleep(0.0001)
+                    sleep(0.001)
                 except KeyError:
-                    sleep(0.0001)
+                    sleep(0.001)
                 except ValueError:
                     sleep(0.001)
                 except IndexError:
-                    sleep(0.0001)
+                    sleep(0.001)
                 except:
                     print(sys.exc_info())
                     exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -152,7 +151,7 @@ def connchecker():
                                 print('skipping previous else')
 
                 except ValueError:
-                    sleep(0.001)
+                    sleep(1)
                 except:
                     print('except in conncheck')
                     print(sys.exc_info())
@@ -161,7 +160,7 @@ def connchecker():
                     print(exc_type, fname, exc_tb.tb_lineno)
                     sleep(10)
                     pass
-
+            sleep(0.01)
         sleep(1)
 def starting():
     print('Initializing')
@@ -181,7 +180,8 @@ def starting():
                             output_sockets.append((startsocket, startpacket[1]))
                         else:
                             print('debug', startpacket)
-                            sleep(0.0001)
+                            sleep(0.001)
+            sleep(0.1)
     except:
         print('global error starting')
         print(sys.exc_info())
@@ -263,6 +263,7 @@ if __name__ == "__main__":
                     except UnicodeDecodeError:
                         sleep(0.001)
                 sleep(0.001)
+            sleep(0.001)
     except TimeoutError:
         print('timeout error!')
     except BlockingIOError:

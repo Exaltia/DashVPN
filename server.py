@@ -23,7 +23,7 @@ def sender():
         except:
             print('problem in sender')
             print(sys.exc_info())
-    sleep(0.001)
+    sleep(0.0001)
 def connchecker():
     lasttime = time()
     while True:
@@ -48,7 +48,7 @@ def connchecker():
                                 print('skipping previous else')
                 except ValueError:
                     print('value error in conncheck')
-                    sleep(0.001)
+                    sleep(0.0001)
                 except:
                     print('global error', sys.exc_info())
                     print(sys.exc_info())
@@ -110,7 +110,7 @@ def taphandling():
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
-                    else:
+                    elif version <4:
                         out_queue.append(bytes('other&', 'ascii') + packet) # We don't care of the order if this is not tcp
                 except:
                     print('error form tap ipv4 handling', sys.exc_info())
@@ -129,9 +129,9 @@ def taphandling():
                 except KeyError:
                     sleep(0.0001)
                 except ValueError:
-                    sleep(0.001)
+                    sleep(0.0001)
                 except ValueError:
-                    sleep(0.001)
+                    sleep(0.0001)
                 except IndexError:
                     sleep(0.0001)
                 except AttributeError:
@@ -146,11 +146,11 @@ def taphandling():
             sys.exit(0)
         except ValueError:
             sys.exit(1)
-            sleep(0.001)
+            sleep(0.0001)
         except:
             print('error from taphandling')
             print(sys.exc_info())
-    sleep(0.001)
+    sleep(0.0001)
 if __name__ == "__main__":
     output_sockets = []
     connstate = {}
@@ -245,7 +245,7 @@ if __name__ == "__main__":
                         print('readable global error')
                         print(sys.exc_info())
     except KeyError:
-        sleep(0.001)
+        sleep(0.0001)
     except BlockingIOError:
         print('sblarf1 :(', sys.exc_info())
         pass
