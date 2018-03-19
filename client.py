@@ -29,7 +29,7 @@ def sender():
             # sleep(10)
             sx.append(next)
             # print('next', next)
-            sleep(3)
+            # sleep(3)
             next[0].sendto(out_queue.pop(0), next[1])
         except IndexError:
             # print('index error!')
@@ -114,7 +114,7 @@ def taphandling():
                     if other_in_queue:
                         to_write = other_in_queue.pop(0)
                         print('to write', to_write)
-                        sleep(15)
+                        # sleep(15)
                         to_write = to_write[0].split(b'&', 1)
                         tap.write(to_write[1])
                     sleep(0.0001)
@@ -155,14 +155,14 @@ def starting():
                         startpacket = startsocket.recvfrom(1500)
                         if b'Got#Blanacetonport' in startpacket[0]:
                             # print('got packet')
-                            sleep(1)
+                            # sleep(1)
                             connstate[configentry] = [2, startpacket[1]]
                             output_sockets.append((startsocket, startpacket[1]))
                             # startsocket.connect(startpacket[1])
                             # print('len connstate', len(connstate))
                         else:
                             print('debug', startpacket)
-                            sleep(10)
+                            # sleep(10)
     except:
         print('global error starting')
         print(sys.exc_info())
@@ -301,6 +301,7 @@ if __name__ == "__main__":
                                     # print('pong from s')
                                     connstate[each] = [2, preprocess[1]]
                         elif preprocess[0] == b'RECONNECTED':
+                            print('got reconnected')
                             output_sockets.append(each)
                         # The & check is to be sure that it's not a control or a malformed packet, and packets received with an 'id' of other are not tcp
                         if b'&' in preprocess and not preprocess.startswith(b'other'):
@@ -312,11 +313,12 @@ if __name__ == "__main__":
                             pass
                     except UnicodeDecodeError:
                         sleep(0.0001)
-                for each in diff:
+            if lasttime < time() - my_timeout_value /2 :
+                lasttime = time()
+                for each in inputs:
                     # We want to not remove the link from the available ones too fast, so we need 2 passes before removing the connection from the list of the available ones, will still poping it out at the setted up time delay
                     try:
-                        if lasttime < time() - my_timeout_value /2 :
-                            lasttime = time()
+
                             for entry in myconfig.sections():
                                 if myconfig[entry]['localbind'] in str(each.getsockname()[0]):
                                     if connstate[entry][0] <= 2 and connstate[entry][0] > 0:
@@ -324,10 +326,12 @@ if __name__ == "__main__":
                                         # print('found entry', entry)
                                         connstate[entry][0] -= 1
                                     else:
-                                        print('removing socket')
+                                        print('removing socket', connstate[entry])
                                         connstate[entry][0] = 0
-                                        output_sockets.pop(output_sockets.index(each))
-                                        each.send(bytes('RECONNECT', 'ascii'))
+                                        print(each)
+                                        output_sockets.pop(output_sockets.index((each, connstate[entry][1])))
+                                        print('reconnecting')
+                                        each.sendto(bytes('RECONNECT', 'ascii'), myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport']))
 
                     except ValueError:
                         sleep(0.001)
@@ -340,15 +344,15 @@ if __name__ == "__main__":
                         pass
 
             sleep(0.0001)
-            if not readable:
-                print('not readable')
-                for each in inputs:
-                    if lasttime < time() - my_timeout_value / 2:
-                        lasttime = time()
-                        for entry in myconfig.sections():
-                            # forsubentry in myconfig[entry]['remoteport']:
-                            if myconfig[entry]['localbind'] in str(each.getsockname()[0]):
-                                each.sendto(bytes('PING', 'ascii'), (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport'])))
+            # if not readable:
+            #     print('not readable')
+            #     for each in inputs:
+            #         if lasttime < time() - my_timeout_value / 2:
+            #             lasttime = time()
+            #             for entry in myconfig.sections():
+            #                 # forsubentry in myconfig[entry]['remoteport']:
+            #                 if myconfig[entry]['localbind'] in str(each.getsockname()[0]):
+            #                     each.sendto(bytes('PING', 'ascii'), (myconfig[entry]['remotehost'], int(myconfig[entry]['remoteport'])))
     except TimeoutError:
         print('timeout error!')
     except BlockingIOError:
