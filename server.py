@@ -1,3 +1,4 @@
+# v0.1.0!
 import socket
 import sys
 import os
@@ -23,11 +24,12 @@ def sender():
         except:
             print('problem in sender')
             print(sys.exc_info())
-    sleep(0.0001)
+            pass
+        sleep(0.0001)
 def connchecker():
     lasttime = time()
     while True:
-        if lasttime < time() - my_timeout_value and len(connstate) == 4:
+        if lasttime < time() - my_timeout_value:# and len(connstate) == 4:
             lasttime = time()
             for each in inputs:
                 # We want to not remove the link from the available ones too fast, so we need 2 passes before removing the connection from the list of the available ones, will still poping it out at the setted up time delay
@@ -110,7 +112,7 @@ def taphandling():
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
-                    elif version <4:
+                    elif version not in (4,6):
                         out_queue.append(bytes('other&', 'ascii') + packet) # We don't care of the order if this is not tcp
                 except:
                     print('error form tap ipv4 handling', sys.exc_info())
@@ -123,19 +125,21 @@ def taphandling():
                         tap.write(to_write[1])
                     if other_in_queue:
                         to_write = other_in_queue.pop()
+                        # if not to_write.startswith(b'other'):
+                        #     print('warning, tcp packet in other queue')
                         to_write = to_write.split(b'&', 1)
+                        if b'other' not in to_write[0]:
+                            print('warning, tcp packet in other queue')
                         tap.write(to_write[1])
                     sleep(0.0001)
                 except KeyError:
                     sleep(0.0001)
                 except ValueError:
                     sleep(0.0001)
-                except ValueError:
-                    sleep(0.0001)
                 except IndexError:
                     sleep(0.0001)
                 except AttributeError:
-                    print('to write error', to_write)
+                    sleep(0.0001)
                 except:
                     print(sys.exc_info())
                     exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -145,12 +149,11 @@ def taphandling():
         except KeyboardInterrupt:
             sys.exit(0)
         except ValueError:
-            sys.exit(1)
             sleep(0.0001)
         except:
             print('error from taphandling')
             print(sys.exc_info())
-    sleep(0.0001)
+        sleep(0.0001)
 if __name__ == "__main__":
     output_sockets = []
     connstate = {}
@@ -163,6 +166,7 @@ if __name__ == "__main__":
         s.bind((myconfig[each]['localbind'], int(myconfig[each]['localport'])))
         all_sockets.append(s)
     out_queue = []
+    inputs = []
     tcp_in_queue = []
     other_in_queue = []
     my_timeout_value = 3
@@ -187,14 +191,17 @@ if __name__ == "__main__":
     nextsocket = 1
     connstate['initOK'] = 0
     try:
-        inputs = all_sockets
         outputs = []
+        for each in all_sockets:
+            inputs.append(each)
+            # outputs.append(each)
+
         exception_sockets = []
         out_queue = []
         tcp_in_queue = []
         other_in_queue = []
         while True:
-            readable, writable, exceptional = select.select(inputs, outputs, inputs)
+            readable, writable, exceptional = select.select(inputs, outputs, inputs, 5)
             if readable:
                 for each in readable:
                     try:
@@ -203,13 +210,13 @@ if __name__ == "__main__":
                             for entry in myconfig.sections():
                                 if myconfig[entry]['localport'] in str(each.getsockname()[1]):
                                     connstate[entry] = [2, preprocess[1]]
-                                    if connstate['initOK'] == 1:
-                                        for outsocket in output_sockets:
-                                            if each in outsocket:
-                                                output_sockets.pop(output_sockets.index(each))
-                                                output_sockets.append((each, (preprocess[1])))
-                                    else:
-                                        output_sockets.append((each, (preprocess[1])))
+                                    # if connstate['initOK'] == 1:
+                                    #     for outsocket in output_sockets:
+                                    #         if each in outsocket:
+                                    #             output_sockets.pop(output_sockets.index(each))
+                                    #             output_sockets.append((each, (preprocess[1])))
+                                    # else:
+                                    output_sockets.append((each, (preprocess[1])))
                                 each.sendto(bytes('Got#Blanacetonport', 'ascii'), preprocess[1])
                                 if len(connstate) == 3:
                                     connstate['initOK'] = 1
@@ -235,11 +242,14 @@ if __name__ == "__main__":
                         elif b'&' in preprocess[0] and not preprocess[0].startswith(b'other'):
                             tcp_in_queue.append(preprocess[0])
                         else:
+                            # print('preprocess', preprocess)
+                            # sleep(0.3)
                             other_in_queue.append(preprocess[0])
                     except AttributeError:
                         print('attribute error', each)
                         # sleep(10)
                     except UnicodeDecodeError:
+                        print('decode error')
                         sleep(0.0001)
                     except:
                         print('readable global error')

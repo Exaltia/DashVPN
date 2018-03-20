@@ -1,4 +1,4 @@
-#v0.0.4!
+# v0.1.0!
 import socket
 import sys
 import os
@@ -85,7 +85,7 @@ def taphandling():
                         else:
                             # just in case something was wrong with the seqnumber, better send an out of order packet than to loose it
                             out_queue.append(bytes('other&', 'ascii') + packet)
-                    elif version < 4:
+                    elif version not in (4,6):
                         out_queue.append(bytes('other&', 'ascii') + packet) # We don't care of the order if this is not tcp
                     sleep(0.001)
                 except:
@@ -123,7 +123,7 @@ def taphandling():
         except:
             print('error from taphandling')
             print(sys.exc_info())
-    sleep(0.001)
+        sleep(0.001)
 def connchecker():
     lasttime = time()
     while True:
@@ -224,15 +224,16 @@ if __name__ == "__main__":
     myconnchecker = _thread.start_new_thread(connchecker, ())
     nextsocket = 1
     try:
-        inputs = all_sockets
+        inputs = []
+        for each in all_sockets:
+            inputs.append(each)
         outputs = []
         exception_sockets = []
         out_queue = []
         tcp_in_queue = []
         other_in_queue = []
         while True:
-            readable, writable, exceptional = select.select(inputs, outputs, inputs, 5)
-            diff = set(readable) ^ set(inputs)
+            readable, writable, exceptional = select.select(inputs, outputs, inputs, 1)
             if readable:
                 for each in readable:
                     try:
@@ -258,9 +259,11 @@ if __name__ == "__main__":
                         elif preprocess[0].startswith(b'other'):
                             other_in_queue.append(preprocess)
                         else:
+                            print('packet not sorted')
                             sleep(0.001)
                             pass
                     except UnicodeDecodeError:
+                        print('decode error')
                         sleep(0.001)
                 sleep(0.001)
             sleep(0.001)
